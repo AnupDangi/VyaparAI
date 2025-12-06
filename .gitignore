@@ -1,0 +1,10 @@
+# Ignore all files in the venv directory
+
+*/venv
+
+# Ignore all files in the .venv directory
+
+*/.venv
+
+# Ignore all files in the .vscode directory
+.env
