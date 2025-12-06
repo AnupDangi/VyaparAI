@@ -1,4 +1,30 @@
-psycopg[binary]
-psycopg2-binary
-asyncpg 
-python-dotenv
+# Web Framework
+fastapi==0.108.0
+uvicorn[standard]==0.25.0
+python-multipart==0.0.6
+
+# Database
+psycopg[binary]==3.1.16
+psycopg2-binary==2.9.9
+
+# Environment & Configuration
+python-dotenv==1.0.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# LLM Integration
+groq==0.4.1
+
+# Embeddings & Vector Search
+sentence-transformers==2.2.2
+qdrant-client==1.16.1
+numpy==1.24.3
+
+# NLP & Text Processing
+transformers==4.36.2
+torch==2.1.2
+
+# Utilities
+requests==2.31.0
+httpx==0.25.2
+tenacity==8.2.3
