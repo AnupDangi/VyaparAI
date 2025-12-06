@@ -1,10 +1,39 @@
-# Ignore all files in the venv directory
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
 
-*/venv
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
 
-# Ignore all files in the .venv directory
+# IDE
+.vscode/
+.idea/
 
-*/.venv
-
-# Ignore all files in the .vscode directory
+# Environment Variables
 .env
+.env.local
+
+# Vector Database
+vector_store/
+*.faiss
+*.index
+qdrant_storage/
+collection/
+storage/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
