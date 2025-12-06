@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import ChatMessage from "@/components/chat/ChatMessage";
 import ChatInput from "@/components/chat/ChatInput";
 import StatsCard from "@/components/admin/StatsCard";
+import { ImageUpload } from "@/components/ui/image-upload";
 import {
   Shield,
   LogOut,
@@ -19,9 +20,9 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-import { productsAPI } from "@/lib/api";
+import { adminAPI, productsAPI } from "@/lib/api";
 
-// ... existing imports
+// ... existing imports ...
 
 interface Message {
   id: string;
@@ -35,17 +36,22 @@ const AdminDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [admin, setAdmin] = useState<any>(null);
 
-  useEffect(() => {
-    const storedAdmin = localStorage.getItem('admin');
-    if (storedAdmin) {
-      setAdmin(JSON.parse(storedAdmin));
-    }
-  }, []);
+  // Stats State
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalRevenue: 0,
+    ordersToday: 0,
+    lowStockItems: 0
+  });
 
+  const [categoryStats, setCategoryStats] = useState<any[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+
+  // Chat State
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
-      content: "Hello Admin! 👋 I'm your analytics assistant. Ask me anything about your store's performance:\n\n• \"How many users bought dairy items this week?\"\n• \"Show me revenue for snacks category\"\n• \"Which product sold the most today?\"\n• \"What's the average order value?\"",
+      content: "Hello Admin! 👋 I'm your analytics assistant. Ask me anything about your store's performance.",
       role: "assistant",
     },
   ]);
@@ -60,13 +66,32 @@ const AdminDashboard = () => {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    const storedAdmin = localStorage.getItem('admin');
+    if (storedAdmin) {
+      setAdmin(JSON.parse(storedAdmin));
+    }
+    fetchStats();
+    fetchProducts();
+  }, []);
+
+  const fetchStats = async () => {
+    const { data } = await adminAPI.getStats();
+    if (data) setStats(data);
+
+    const { data: catData } = await adminAPI.getCategoryPerformance();
+    if (catData) setCategoryStats(catData);
+
+    const { data: actData } = await adminAPI.getRecentActivity();
+    if (actData) setRecentActivity(actData);
+  };
+
+  /* AI Logic */
   const handleSendMessage = (content: string) => {
-    // ... logic ...
     const userMessage: Message = { id: Date.now().toString(), content, role: "user" };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
     setTimeout(() => {
-      // ... simple response logic for now ...
       const assistantMessage: Message = { id: (Date.now() + 1).toString(), content: "AI is processing...", role: "assistant" };
       setMessages((prev) => [...prev, assistantMessage]);
       setIsLoading(false);
@@ -79,7 +104,7 @@ const AdminDashboard = () => {
     navigate("/");
   };
 
-  // Products State
+  /* Products State */
   const [products, setProducts] = useState<any[]>([]);
   const [isProductLoading, setIsProductLoading] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -92,17 +117,15 @@ const AdminDashboard = () => {
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-  // Fetch Products
+  /* Fetch Products */
   const fetchProducts = async () => {
     setIsProductLoading(true);
     const { data } = await productsAPI.getAll();
-    if (data) setProducts(data);
+    if (data) {
+      setProducts(data);
+    }
     setIsProductLoading(false);
   };
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +151,7 @@ const AdminDashboard = () => {
       setNewProduct({ title: "", price: "", stock: "", category: "", description: "" });
       setImageFile(null);
       fetchProducts();
+      fetchStats(); // Update stats after adding product
     }
   };
 
@@ -139,16 +163,15 @@ const AdminDashboard = () => {
     } else {
       toast({ title: "Deleted", description: "Product removed" });
       fetchProducts();
+      fetchStats();
     }
   };
-
-  // ... existing code ...
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
+      {/* ... Header Content ... (Keep existing Header) */}
       <header className="sticky top-0 z-50 border-b border-border bg-card/95 backdrop-blur">
-        {/* ... Header Content ... */}
         <div className="flex items-center justify-between px-4 lg:px-6 h-16">
           <div className="flex items-center gap-4">
             <button
@@ -181,28 +204,27 @@ const AdminDashboard = () => {
       <div className="container py-6 lg:py-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* ... Existing Stats ... */}
           <StatsCard
             title="Total Users"
-            value="12,543"
+            value={stats.totalUsers.toLocaleString()}
             icon={Users}
             trend={{ value: 12.5, isPositive: true }}
           />
           <StatsCard
             title="Total Revenue"
-            value="₹4.2L"
+            value={`₹${stats.totalRevenue.toLocaleString()}`}
             icon={TrendingUp}
             trend={{ value: 8.2, isPositive: true }}
           />
           <StatsCard
             title="Orders Today"
-            value="847"
+            value={stats.ordersToday.toString()}
             icon={ShoppingBag}
             trend={{ value: 3.1, isPositive: true }}
           />
           <StatsCard
             title="Low Stock Items"
-            value="23"
+            value={stats.lowStockItems.toString()}
             icon={AlertTriangle}
             trend={{ value: 5, isPositive: false }}
           />
@@ -227,7 +249,14 @@ const AdminDashboard = () => {
                     <input className="p-2 border rounded bg-background" placeholder="Price (₹)" type="number" value={newProduct.price} onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} required />
                     <input className="p-2 border rounded bg-background" placeholder="Stock Quantity" type="number" value={newProduct.stock} onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })} required />
                     <input className="p-2 border rounded bg-background" placeholder="Category" value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })} required />
-                    <input className="p-2 border rounded bg-background col-span-2" placeholder="Image File" type="file" onChange={e => setImageFile(e.target.files?.[0] || null)} accept="image/*" required />
+
+                    <div className="col-span-1 md:col-span-2">
+                      <label className="block text-sm font-medium mb-1">Product Image</label>
+                      <ImageUpload
+                        value={imageFile}
+                        onChange={setImageFile}
+                      />
+                    </div>
                     <textarea className="p-2 border rounded bg-background col-span-2" placeholder="Description" value={newProduct.description} onChange={e => setNewProduct({ ...newProduct, description: e.target.value })} required />
                   </div>
                   <Button type="submit" disabled={isProductLoading}>
@@ -323,26 +352,23 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {[
-                    { name: "Grocery", revenue: "₹1.2L", orders: 324, growth: 12 },
-                    { name: "Dairy & Eggs", revenue: "₹85K", orders: 247, growth: 8 },
-                    { name: "Snacks", revenue: "₹67K", orders: 189, growth: 15 },
-                    { name: "Beverages", revenue: "₹45K", orders: 156, growth: -3 },
-                    { name: "Personal Care", revenue: "₹32K", orders: 98, growth: 6 },
-                  ].map((category) => (
+                  {categoryStats.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No category data yet.</p>
+                  ) : categoryStats.map((category) => (
                     <div key={category.name} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
                       <div>
                         <p className="font-medium text-foreground">{category.name}</p>
                         <p className="text-sm text-muted-foreground">{category.orders} orders</p>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold text-foreground">{category.revenue}</p>
+                        <p className="font-semibold text-foreground">₹{category.revenue?.toLocaleString() ?? 0}</p>
                         <p className={`text-sm ${category.growth >= 0 ? 'text-success' : 'text-destructive'}`}>
                           {category.growth >= 0 ? '+' : ''}{category.growth}%
                         </p>
                       </div>
                     </div>
                   ))}
+
                 </div>
               </CardContent>
             </Card>
@@ -354,13 +380,9 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {[
-                    { action: "New order #1234", time: "2 min ago", type: "order" },
-                    { action: "User registered", time: "5 min ago", type: "user" },
-                    { action: "Low stock: Amul Milk", time: "12 min ago", type: "alert" },
-                    { action: "Order #1233 delivered", time: "18 min ago", type: "success" },
-                    { action: "New order #1232", time: "25 min ago", type: "order" },
-                  ].map((activity, index) => (
+                  {recentActivity.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No recent activity.</p>
+                  ) : recentActivity.map((activity, index) => (
                     <div key={index} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                       <div className="flex items-center gap-3">
                         <div className={`h-2 w-2 rounded-full ${activity.type === 'alert' ? 'bg-warning' :

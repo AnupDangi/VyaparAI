@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, products, bookings, customers
+from routers import auth, products, bookings, customers, ocr, stats
 import uvicorn
 import logging
 
@@ -22,9 +22,11 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(auth.router, tags=["auth"])
+app.include_router(stats.router, prefix="/api/admin", tags=["admin_stats"])
 app.include_router(products.router, prefix="/api/products", tags=["products"])
 app.include_router(bookings.router, prefix="/api/bookings", tags=["bookings"])
 app.include_router(customers.router, prefix="/api/customers", tags=["customers"])
+app.include_router(ocr.router, prefix="/api/ocr", tags=["ocr"])
 
 @app.get("/")
 def read_root():

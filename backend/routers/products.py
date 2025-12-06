@@ -30,6 +30,19 @@ def get_products():
     finally:
         conn.close()
 
+@router.get("/{product_id}")
+def get_product(product_id: int):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
+            product = cur.fetchone()
+            if not product:
+                raise HTTPException(status_code=404, detail="Product not found")
+            return product
+    finally:
+        conn.close()
+
 @router.post("/")
 async def create_product(
     title: str = Form(...),

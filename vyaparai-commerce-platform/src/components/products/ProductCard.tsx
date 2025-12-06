@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Minus, ShoppingCart } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 interface ProductCardProps {
   id: string;
@@ -45,7 +46,7 @@ const ProductCard = ({
 
   return (
     <Card className="overflow-hidden hover:shadow-card-hover group">
-      <div className="aspect-square relative overflow-hidden bg-secondary">
+      <Link to={`/product/${id}`} className="block relative aspect-square overflow-hidden bg-secondary">
         <img
           src={image}
           alt={title}
@@ -61,11 +62,13 @@ const ProductCard = ({
             <span className="text-sm font-medium text-destructive">Out of Stock</span>
           </div>
         )}
-      </div>
+      </Link>
 
       <div className="p-4 space-y-3">
         <div>
-          <h3 className="font-medium text-foreground line-clamp-2 leading-snug">{title}</h3>
+          <Link to={`/product/${id}`}>
+            <h3 className="font-medium text-foreground line-clamp-2 leading-snug hover:underline">{title}</h3>
+          </Link>
           <p className="text-lg font-semibold text-foreground mt-1">₹{price.toLocaleString()}</p>
         </div>
 

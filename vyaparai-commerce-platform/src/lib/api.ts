@@ -267,10 +267,24 @@ export const adminAPI = {
   },
 };
 
+// Orders APIs
+export const ordersAPI = {
+  create: async (orderData: { items: any[], total_amount: number, clerk_id: string, shipping_address: string }) => {
+    return fetchAPI<{ success: boolean; orderId: number; message: string }>('/orders/', {
+      method: 'POST',
+      body: JSON.stringify(orderData)
+    });
+  },
+  getUserOrders: async (clerkId: string) => {
+    return fetchAPI<{ id: number; total: number; status: string; date: string; items: any[] }[]>(`/orders/${clerkId}`);
+  }
+};
+
 export default {
   auth: authAPI,
   products: productsAPI,
   categories: categoriesAPI,
   cart: cartAPI,
   admin: adminAPI,
+  orders: ordersAPI,
 };

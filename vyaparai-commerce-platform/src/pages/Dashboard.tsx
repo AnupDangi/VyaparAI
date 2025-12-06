@@ -17,6 +17,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { productsAPI, Product } from "@/lib/api";
+import { useCart } from "@/context/CartContext";
 
 interface Message {
   id: string;
@@ -25,37 +27,28 @@ interface Message {
   products?: Product[];
 }
 
-interface Product {
-  id: string;
-  title: string;
-  price: number;
-  stock: number;
-  image: string;
-  category: string;
-}
-
-// Mock data
-const mockCategories = [
-  { id: "grocery", name: "Grocery", icon: "🛒", count: 145 },
-  { id: "dairy", name: "Dairy & Eggs", icon: "🥛", count: 32 },
-  { id: "snacks", name: "Snacks", icon: "🍿", count: 67 },
-  { id: "beverages", name: "Beverages", icon: "🥤", count: 45 },
-  { id: "personal-care", name: "Personal Care", icon: "🧴", count: 89 },
-  { id: "household", name: "Household", icon: "🏠", count: 56 },
-];
-
-const mockProducts: Product[] = [
-  { id: "1", title: "Tata Salt 1kg", price: 28, stock: 50, image: "https://images.unsplash.com/photo-1518110925495-5fe2fda0442c?w=300&h=300&fit=crop", category: "Grocery" },
-  { id: "2", title: "Amul Butter 500g", price: 280, stock: 25, image: "https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=300&h=300&fit=crop", category: "Dairy & Eggs" },
-  { id: "3", title: "Lays Classic Chips", price: 20, stock: 100, image: "https://images.unsplash.com/photo-1566478989037-eec170784d0b?w=300&h=300&fit=crop", category: "Snacks" },
-  { id: "4", title: "Coca Cola 2L", price: 95, stock: 40, image: "https://images.unsplash.com/photo-1629203851122-3726ecdf080e?w=300&h=300&fit=crop", category: "Beverages" },
-  { id: "5", title: "Aashirvaad Atta 5kg", price: 255, stock: 30, image: "https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=300&h=300&fit=crop", category: "Grocery" },
-  { id: "6", title: "Amul Milk 1L", price: 60, stock: 0, image: "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300&h=300&fit=crop", category: "Dairy & Eggs" },
-];
+// Helper to assign icons dynamically
+const getCategoryIcon = (name: string) => {
+  const n = name.toLowerCase();
+  if (n.includes("fruit") || n.includes("veg")) return "🍎";
+  if (n.includes("dairy") || n.includes("milk") || n.includes("egg")) return "🥛";
+  if (n.includes("snack") || n.includes("chip")) return "🍿";
+  if (n.includes("beverage") || n.includes("drink") || n.includes("juice")) return "🥤";
+  if (n.includes("care") || n.includes("soap")) return "🧴";
+  if (n.includes("house") || n.includes("clean")) return "🏠";
+  return "📦";
+};
 
 const Dashboard = () => {
   const { user } = useUser();
   const navigate = useNavigate();
+
+  // Products State
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -65,10 +58,11 @@ const Dashboard = () => {
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [showProducts, setShowProducts] = useState(false);
-  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
+  const [showProducts, setShowProducts] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [cartCount, setCartCount] = useState(0);
+  const { addToCart, cartCount } = useCart();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -79,12 +73,43 @@ const Dashboard = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Fetch Products
+  useEffect(() => {
+    const loadProducts = async () => {
+      setLoadingProducts(true);
+      const { data } = await productsAPI.getAll();
+      if (data) {
+        // Map backend fields to frontend if needed
+        const mapped = data.map((p: any) => ({
+          ...p,
+          id: p.id.toString(),
+          image: p.image_url || p.image || "https://placehold.co/300x300?text=No+Image"
+        }));
+        setAllProducts(mapped);
+        setDisplayedProducts(mapped);
+
+        // Update category counts dynamically from DB products
+        const uniqueCats = Array.from(new Set(mapped.map((p: any) => p.category))).filter(Boolean);
+        const newCats = uniqueCats.map((cat: any) => ({
+          id: cat,
+          name: cat,
+          icon: getCategoryIcon(cat),
+          count: mapped.filter((p: any) => p.category === cat).length
+        }));
+        setCategories(newCats);
+      }
+      setLoadingProducts(false);
+    };
+    loadProducts();
+  }, []);
+
   // Sync User to Backend
   useEffect(() => {
     if (user) {
       const syncUser = async () => {
         try {
-          await fetch('http://localhost:8000/api/users/sync', {
+          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+          await fetch(`${API_URL}/users/sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -92,7 +117,6 @@ const Dashboard = () => {
               email: user.primaryEmailAddress?.emailAddress,
               fullName: user.fullName,
               phone: user.primaryPhoneNumber?.phoneNumber,
-              // Add default address/city/pincode if stored in Clerk metadata or leave empty
             })
           });
           console.log("User synced to backend");
@@ -114,76 +138,81 @@ const Dashboard = () => {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Simulate AI response
+    // Simulate AI response with REAL product filtering
     setTimeout(() => {
       const lowerContent = content.toLowerCase();
       let responseContent = "";
       let products: Product[] = [];
 
-      if (lowerContent.includes("snack") || lowerContent.includes("chips")) {
-        responseContent = "Here are some snack options for you! 🍿";
-        products = mockProducts.filter((p) => p.category === "Snacks");
-      } else if (lowerContent.includes("milk") || lowerContent.includes("dairy") || lowerContent.includes("egg")) {
-        responseContent = "Here are dairy products available near you 🥛";
-        products = mockProducts.filter((p) => p.category === "Dairy & Eggs");
-      } else if (lowerContent.includes("discount") || lowerContent.includes("offer") || lowerContent.includes("sale")) {
-        responseContent = "Great news! Here are today's special offers 🎉";
-        products = mockProducts.slice(0, 3);
-      } else if (lowerContent.includes("show") || lowerContent.includes("all") || lowerContent.includes("product")) {
-        responseContent = "Here's what's available in our store:";
-        products = mockProducts;
+      // Simple keyword search
+      const matchedProducts = allProducts.filter(p =>
+        p.title.toLowerCase().includes(lowerContent) ||
+        p.category.toLowerCase().includes(lowerContent) ||
+        p.description?.toLowerCase().includes(lowerContent)
+      );
+
+      if (matchedProducts.length > 0) {
+        responseContent = `I found ${matchedProducts.length} items matching your request!`;
+        products = matchedProducts.slice(0, 5);
       } else {
-        responseContent = "I found some products that might interest you based on your query:";
-        products = mockProducts.slice(0, 4);
+        responseContent = "I couldn't find exactly what you asked for, but here are some popular items:";
+        products = allProducts.slice(0, 4);
+      }
+
+      if (lowerContent.includes("snack") || lowerContent.includes("chips")) {
+        responseContent = "Here are some snack options! 🍿";
+        products = allProducts.filter((p) => p.category.toLowerCase().includes("snack"));
+      } else if (lowerContent.includes("milk") || lowerContent.includes("dairy")) {
+        responseContent = "Fresh dairy products 🥛";
+        products = allProducts.filter((p) => p.category.toLowerCase().includes("dairy"));
       }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: responseContent,
         role: "assistant",
-        products,
+        products: products.length > 0 ? products : undefined,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
       setShowProducts(true);
-      setDisplayedProducts(products);
+      // setDisplayedProducts(products); // Don't filter the right panel solely on chat, unless desired. 
+      // Let's keep right panel as "browse" or update it. 
+      // The original code updated displayedProducts. I'll stick to that pattern if it makes sense, 
+      // or allows the user to see what they asked for.
+      if (products.length > 0) setDisplayedProducts(products);
+
       setIsLoading(false);
     }, 1500);
   };
 
   const handleAddToCart = (productId: string, quantity: number) => {
-    const product = mockProducts.find((p) => p.id === productId);
+    const product = allProducts.find((p) => p.id === productId);
     if (product) {
-      setCartCount((prev) => prev + quantity);
-      toast({
-        title: "Added to cart!",
-        description: `${quantity}x ${product.title} added to your cart`,
-      });
+      addToCart(product, quantity);
     }
   };
 
   const handleCategorySelect = (categoryId: string | null) => {
     setSelectedCategory(categoryId);
     if (categoryId) {
-      const category = mockCategories.find((c) => c.id === categoryId);
-      if (category) {
-        const filtered = mockProducts.filter(
-          (p) => p.category.toLowerCase().replace(/[^a-z]/g, "") === categoryId.replace("-", "")
-        );
-        setDisplayedProducts(filtered.length > 0 ? filtered : mockProducts);
-        setShowProducts(true);
-      }
+      // Filter Logic
+      const filtered = allProducts.filter(p => {
+        const catName = categories.find(c => c.id === categoryId)?.name.toLowerCase();
+        return p.category.toLowerCase() === catName || p.category.toLowerCase() === categoryId;
+      });
+      setDisplayedProducts(filtered.length > 0 ? filtered : []);
+      setShowProducts(true);
     } else {
-      setDisplayedProducts(mockProducts);
+      setDisplayedProducts(allProducts);
       setShowProducts(true);
     }
     setSidebarOpen(false);
   };
 
-
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
-      {/* Amazon-like Header */}
+      {/* ... Header ... */}
       <header className="sticky top-0 z-50 bg-[#131921] text-white shrink-0">
         <div className="flex items-center gap-4 px-4 h-16 max-w-[1500px] mx-auto">
           {/* Logo */}
@@ -211,6 +240,20 @@ const Dashboard = () => {
                 type="text"
                 className="flex-1 px-3 text-black text-sm outline-none"
                 placeholder="Search VyaparAI..."
+                onChange={(e) => {
+                  const term = e.target.value.toLowerCase();
+                  setSearchQuery(term);
+                  if (!term) {
+                    setDisplayedProducts(allProducts);
+                  } else {
+                    const matches = allProducts.filter(p =>
+                      p.title.toLowerCase().includes(term) ||
+                      p.category.toLowerCase().includes(term) ||
+                      p.description?.toLowerCase().includes(term)
+                    );
+                    setDisplayedProducts(matches);
+                  }
+                }}
               />
               <button className="bg-[#febd69] hover:bg-[#f3a847] px-4 flex items-center justify-center">
                 <Search className="h-5 w-5 text-black" />
@@ -262,13 +305,10 @@ const Dashboard = () => {
             <Menu className="h-5 w-5" />
             All
           </button>
-          <span className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap">Fresh</span>
-          <span className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap">Mobiles</span>
-          <span className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap">Best Sellers</span>
-          <span className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap">Today's Deals</span>
-          <span className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap">Electronics</span>
-          <span className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap hidden sm:inline">Customer Service</span>
-          <span className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap hidden sm:inline">New Releases</span>
+
+          {categories.slice(0, 5).map(cat => (
+            <span key={cat.id} onClick={() => handleCategorySelect(cat.id)} className="hover:border border-white/0 hover:border-white px-2 py-1 rounded-sm cursor-pointer whitespace-nowrap">{cat.name}</span>
+          ))}
         </div>
       </header>
 
@@ -284,7 +324,7 @@ const Dashboard = () => {
             }`}
         >
           <CategorySidebar
-            categories={mockCategories}
+            categories={categories}
             selectedCategory={selectedCategory}
             onSelectCategory={handleCategorySelect}
           />
@@ -335,22 +375,55 @@ const Dashboard = () => {
           </div>
 
           {/* Products Grid (Desktop Right Panel) */}
-          {showProducts && (
-            <div className="hidden lg:block w-[400px] xl:w-[500px] overflow-y-auto p-6 bg-secondary/30 border-l border-border">
-              <h3 className="font-serif font-semibold text-foreground mb-4">
-                Products ({displayedProducts.length})
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                {displayedProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    {...product}
-                    onAddToCart={handleAddToCart}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+          <div className={`hidden lg:block w-[400px] xl:w-[500px] overflow-y-auto p-6 bg-secondary/30 border-l border-border ${showProducts ? '' : 'hidden'}`}>
+            <h3 className="font-serif font-semibold text-foreground mb-4">
+              {selectedCategory ? categories.find(c => c.id === selectedCategory)?.name : searchQuery ? "Search Results" : "Featured Categories"}
+            </h3>
+            {loadingProducts ? (
+              <div className="text-center py-10">Loading Products...</div>
+            ) : (
+              <>
+                {!selectedCategory && !searchQuery ? (
+                  <div className="space-y-8 pb-10">
+                    {categories.map(cat => {
+                      const catProducts = allProducts.filter(p => p.category?.toLowerCase() === cat.name.toLowerCase() || p.category?.toLowerCase() === cat.id).slice(0, 4);
+                      if (catProducts.length === 0) return null;
+                      return (
+                        <div key={cat.id}>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-bold flex items-center gap-2">
+                              <span>{cat.icon}</span> {cat.name}
+                            </h4>
+                            <Button variant="link" size="sm" onClick={() => handleCategorySelect(cat.id)}>See More</Button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            {catProducts.map((product) => (
+                              <ProductCard
+                                key={product.id}
+                                {...product}
+                                onAddToCart={handleAddToCart}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    {displayedProducts.length === 0 && <p className="col-span-2 text-muted-foreground">No products found.</p>}
+                    {displayedProducts.map((product) => (
+                      <ProductCard
+                        key={product.id}
+                        {...product}
+                        onAddToCart={handleAddToCart}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
