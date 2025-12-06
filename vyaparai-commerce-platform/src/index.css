@@ -1,0 +1,252 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm, professional palette inspired by Amazon's trust + modern fintech */
+    --background: 40 33% 98%;
+    --foreground: 220 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 15%;
+
+    /* Deep navy - trust & professionalism */
+    --primary: 220 45% 20%;
+    --primary-foreground: 40 33% 98%;
+
+    /* Soft warm gray surfaces */
+    --secondary: 40 15% 94%;
+    --secondary-foreground: 220 20% 15%;
+
+    --muted: 40 15% 92%;
+    --muted-foreground: 220 10% 45%;
+
+    /* Warm amber accent - CTAs & highlights */
+    --accent: 35 95% 52%;
+    --accent-foreground: 220 20% 10%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 220 45% 20%;
+
+    --radius: 0.625rem;
+
+    /* Custom tokens */
+    --success: 152 60% 42%;
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 20% 10%;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(220 20% 15% / 0.04);
+    --shadow-md: 0 4px 6px -1px hsl(220 20% 15% / 0.06), 0 2px 4px -2px hsl(220 20% 15% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(220 20% 15% / 0.08), 0 4px 6px -4px hsl(220 20% 15% / 0.04);
+    --shadow-xl: 0 20px 25px -5px hsl(220 20% 15% / 0.1), 0 8px 10px -6px hsl(220 20% 15% / 0.05);
+
+    /* Gradients */
+    --gradient-hero: linear-gradient(135deg, hsl(40 33% 98%) 0%, hsl(40 20% 95%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(35 95% 52%) 0%, hsl(28 90% 48%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(220 45% 20%) 0%, hsl(220 45% 28%) 100%);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 15%;
+    --sidebar-primary: 220 45% 20%;
+    --sidebar-primary-foreground: 40 33% 98%;
+    --sidebar-accent: 40 15% 94%;
+    --sidebar-accent-foreground: 220 20% 15%;
+    --sidebar-border: 40 15% 88%;
+    --sidebar-ring: 220 45% 20%;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 40 20% 95%;
+
+    --card: 220 20% 13%;
+    --card-foreground: 40 20% 95%;
+
+    --popover: 220 20% 13%;
+    --popover-foreground: 40 20% 95%;
+
+    --primary: 40 33% 95%;
+    --primary-foreground: 220 20% 10%;
+
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 40 20% 95%;
+
+    --muted: 220 15% 20%;
+    --muted-foreground: 40 10% 60%;
+
+    --accent: 35 95% 55%;
+    --accent-foreground: 220 20% 10%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 22%;
+    --input: 220 15% 22%;
+    --ring: 40 33% 95%;
+
+    --sidebar-background: 220 20% 12%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 40 33% 95%;
+    --sidebar-primary-foreground: 220 20% 10%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 40 20% 95%;
+    --sidebar-border: 220 15% 22%;
+    --sidebar-ring: 40 33% 95%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'DM Sans', system-ui, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Fraunces', Georgia, serif;
+    @apply tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.6s ease-out forwards;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.5s ease-out forwards;
+  }
+
+  .animate-slide-in-left {
+    animation: slideInLeft 0.5s ease-out forwards;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.3s ease-out forwards;
+  }
+
+  .animate-pulse-subtle {
+    animation: pulseSoft 2s ease-in-out infinite;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-primary);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-md);
+  }
+
+  .shadow-card-hover {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-xl);
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted/50;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/20 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}
