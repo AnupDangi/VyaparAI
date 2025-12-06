@@ -9,17 +9,20 @@ async function fetchAPI<T>(
   options?: RequestInit
 ): Promise<{ data: T | null; error: string | null }> {
   try {
+    const isFormData = options?.body instanceof FormData;
+    const headers = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...options?.headers,
+    };
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
+      headers,
       ...options,
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      return { data: null, error: errorData.message || `HTTP error ${response.status}` };
+      return { data: null, error: errorData.message || errorData.detail || `HTTP error ${response.status}` };
     }
 
     const data = await response.json();
@@ -38,6 +41,7 @@ export interface Product {
   image: string;
   category: string;
   description?: string;
+  image_url?: string; // Add optional backend field compatibility
 }
 
 export interface Category {
@@ -110,19 +114,36 @@ export const authAPI = {
 // Products APIs
 export const productsAPI = {
   // Get all products
-  getAll: async (params?: { category?: string; search?: string; page?: number; limit?: number }) => {
-    const searchParams = new URLSearchParams();
-    if (params?.category) searchParams.append('category', params.category);
-    if (params?.search) searchParams.append('search', params.search);
-    if (params?.page) searchParams.append('page', params.page.toString());
-    if (params?.limit) searchParams.append('limit', params.limit.toString());
-
-    return fetchAPI<{ products: Product[]; total: number }>(`/products?${searchParams.toString()}`);
+  getAll: async () => {
+    return fetchAPI<Product[]>('/products/');
   },
 
   // Get single product
-  getById: async (id: string) => {
+  getById: async (id: string | number) => {
     return fetchAPI<Product>(`/products/${id}`);
+  },
+
+  // Create Product (Admin)
+  create: async (productData: FormData) => {
+    return fetchAPI<{ success: boolean; product: Product }>('/products/', {
+      method: 'POST',
+      body: productData
+    });
+  },
+
+  // Update Product (Admin)
+  update: async (id: number, productData: FormData) => {
+    return fetchAPI<{ success: boolean; product: Product }>(`/products/${id}`, {
+      method: 'PUT',
+      body: productData
+    });
+  },
+
+  // Delete Product (Admin)
+  delete: async (id: number) => {
+    return fetchAPI<{ success: boolean; message: string }>(`/products/${id}`, {
+      method: 'DELETE'
+    });
   },
 
   // Search products with natural language
