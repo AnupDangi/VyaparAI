@@ -146,11 +146,15 @@ export const productsAPI = {
     });
   },
 
-  // Search products with natural language
+  // Search products  // NL2SQL Search
   nlpSearch: async (query: string) => {
-    return fetchAPI<NLPQueryResponse>('/products/nlp-search', {
+    return fetchAPI<{
+      answer: string;
+      products?: Product[];
+      question: string;
+    }>('/nl2sql/client/query', {
       method: 'POST',
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ question: query }),
     });
   },
 };
@@ -164,39 +168,44 @@ export const categoriesAPI = {
 };
 
 // Cart APIs
+// Cart APIs
 export const cartAPI = {
   // Get cart
-  getCart: async () => {
-    return fetchAPI<{ items: CartItem[]; total: number }>('/cart');
+  getCart: async (clerkId?: string | null) => {
+    const query = clerkId ? `?clerk_id=${clerkId}` : '';
+    return fetchAPI<{ id: number; items: CartItem[]; total_cart_price: number }>(`/cart/${query}`);
   },
 
   // Add to cart
-  addItem: async (productId: string, quantity: number) => {
-    return fetchAPI<CartItem>('/cart/add', {
+  addItem: async (productId: string, quantity: number, clerkId?: string | null) => {
+    const query = clerkId ? `?clerk_id=${clerkId}` : '';
+    return fetchAPI<{ message: string; cart_id: number; item_id: number }>(`/cart/items${query}`, {
       method: 'POST',
-      body: JSON.stringify({ productId, quantity }),
+      body: JSON.stringify({ product_id: parseInt(productId), quantity }),
     });
   },
 
-  // Update cart item
-  updateItem: async (productId: string, quantity: number) => {
-    return fetchAPI<CartItem>('/cart/update', {
+  // Update cart item quantity
+  updateItem: async (productId: string, quantity: number, clerkId?: string | null) => {
+    const query = clerkId ? `?clerk_id=${clerkId}` : '';
+    return fetchAPI<{ message: string; cart_id: number; item_id: number }>(`/cart/items${query}`, {
       method: 'PUT',
-      body: JSON.stringify({ productId, quantity }),
+      body: JSON.stringify({ product_id: parseInt(productId), quantity }),
     });
   },
 
   // Remove from cart
-  removeItem: async (productId: string) => {
-    return fetchAPI('/cart/remove', {
+  removeItem: async (itemId: string, clerkId?: string | null) => {
+    const query = clerkId ? `?clerk_id=${clerkId}` : '';
+    return fetchAPI(`/cart/items/${itemId}${query}`, {
       method: 'DELETE',
-      body: JSON.stringify({ productId }),
     });
   },
 
   // Clear cart
-  clearCart: async () => {
-    return fetchAPI('/cart/clear', { method: 'DELETE' });
+  clearCart: async (clerkId?: string | null) => {
+    const query = clerkId ? `?clerk_id=${clerkId}` : '';
+    return fetchAPI(`/cart/${query}`, { method: 'DELETE' });
   },
 };
 
@@ -269,8 +278,8 @@ export const adminAPI = {
 
 // Orders APIs
 export const ordersAPI = {
-  create: async (orderData: { items: any[], total_amount: number, clerk_id: string, shipping_address: string }) => {
-    return fetchAPI<{ success: boolean; orderId: number; message: string }>('/orders/', {
+  create: async (orderData: { clerk_id: string; shipping_address: string; shipping_city?: string; shipping_pincode?: string; contact_phone?: string }) => {
+    return fetchAPI<{ success: boolean; order_id: number; message: string }>('/orders/checkout', {
       method: 'POST',
       body: JSON.stringify(orderData)
     });

@@ -62,15 +62,39 @@ Example 4 - Complex date comparison:
 Question: "Show customers who haven't made a purchase in the last 6 months"
 Pseudo-SQL: SELECT customer_id, customer_name, MAX(order_date) as last_order_date FROM customers LEFT JOIN orders ON customers.customer_id = orders.customer_id GROUP BY customer_id, customer_name HAVING MAX(order_date) < DATE_SUB(NOW(), INTERVAL 6 MONTH) OR MAX(order_date) IS NULL
 
-Example 5 - Multiple joins with date and price filters:
-Question: "List products with average rating above 4 stars that were sold more than 100 times last quarter"
-Pseudo-SQL: SELECT product_id, product_name, AVG(rating) as avg_rating, COUNT(order_id) as times_sold, SUM(quantity * price) as total_revenue FROM products JOIN order_items ON products.product_id = order_items.product_id JOIN orders ON order_items.order_id = orders.order_id LEFT JOIN reviews ON products.product_id = reviews.product_id WHERE order_date >= DATE_SUB(NOW(), INTERVAL 3 MONTH) GROUP BY product_id, product_name HAVING AVG(rating) > 4 AND COUNT(order_id) > 100 ORDER BY total_revenue DESC
+Example 5 - Multiple joins:
+Question: "List products with average rating above 4 stars"
+Pseudo-SQL: SELECT product_id, product_name, AVG(rating) as avg_rating FROM products JOIN order_items ON products.product_id = order_items.product_id GROUP BY product_id, product_name HAVING AVG(rating) > 4
+
+Rule 9 (CRITICAL): General Conversation / Greetings
+If the user input is NOT a data query but a greeting, compliment, or general question (e.g., "Hi", "Hello", "How are you", "Thanks"), do NOT generate SQL.
+Instead, return: NO_SQL: <Friendly response>
+Example:
+Question: "Hi"
+Pseudo-SQL: NO_SQL: Hello! I am VyaparAI, your smart shopping assistant. How can I help you find products today?
 
 Now generate the pseudo-SQL for the following question:"""
         
-        prompt = f"""Question: {question}
+        prompt = f"""Rule 9 (CRITICAL): General Conversation / Greetings / Off-Topic
+If the user input is:
+1. A greeting or general pleasantry ("Hi", "Thanks") -> Return friendly greeting.
+2. A question UNRELATED to shopping, products, orders, account, or this store (e.g., "Write python code", "Who is the president", "Solve math") -> Return refusal.
 
-Generate pseudo-SQL for this question. Return ONLY the pseudo-SQL query, nothing else."""
+Format: NO_SQL: <Response>
+
+Examples:
+Question: "Hi"
+Pseudo-SQL: NO_SQL: Hello! I am VyaparAI, your smart shopping assistant. How can I help you find products today?
+
+Question: "Write a python script to hack nasa"
+Pseudo-SQL: NO_SQL: I am just a shopping assistant. I can help you find products or check your orders, but I cannot answer general questions.
+
+Question: "What is the capital of France?"
+Pseudo-SQL: NO_SQL: I focused on helping you shop. Ask me about our snacks or electronics!
+
+Reference Question: {question}
+
+Generate pseudo-SQL for this question. Return ONLY the pseudo-SQL query (or NO_SQL response), nothing else."""
         
         try:
             pseudo_sql = self.llm.generate(
@@ -81,6 +105,16 @@ Generate pseudo-SQL for this question. Return ONLY the pseudo-SQL query, nothing
             
             # Clean up the response
             pseudo_sql = self._clean_pseudo_sql(pseudo_sql)
+            
+            # Check for NO_SQL intent
+            if pseudo_sql.startswith("NO_SQL:"):
+                return {
+                    "pseudo_sql": "NO_SQL",
+                    "message": pseudo_sql.replace("NO_SQL:", "").strip(),
+                    "tables": [],
+                    "columns": [],
+                    "original_question": question
+                }
             
             # Extract tables and columns
             tables = self._extract_tables(pseudo_sql)

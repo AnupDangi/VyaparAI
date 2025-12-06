@@ -97,7 +97,10 @@ export default function Cart() {
                                 </div>
                             </CardContent>
                             <CardFooter>
-                                <Button className="w-full bg-[#f08804] hover:bg-[#d07300] text-black">
+                                <Button
+                                    className="w-full bg-[#f08804] hover:bg-[#d07300] text-black"
+                                    onClick={() => navigate("/checkout")}
+                                >
                                     Proceed to Checkout
                                 </Button>
                             </CardFooter>

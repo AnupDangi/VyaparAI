@@ -69,7 +69,7 @@ const ProductCard = ({
           <Link to={`/product/${id}`}>
             <h3 className="font-medium text-foreground line-clamp-2 leading-snug hover:underline">{title}</h3>
           </Link>
-          <p className="text-lg font-semibold text-foreground mt-1">₹{price.toLocaleString()}</p>
+          <p className="text-lg font-semibold text-foreground mt-1">₹{price ? price.toLocaleString() : '0'}</p>
         </div>
 
         <div className="flex items-center justify-between text-sm text-muted-foreground">

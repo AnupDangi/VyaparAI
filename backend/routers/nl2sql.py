@@ -1,5 +1,6 @@
 """
-API Routes - NL-to-SQL Endpoints (Client & Admin)
+NL2SQL Router - Handles Natural Language Queries
+Supports separate Client and Admin modes.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
@@ -14,11 +15,11 @@ class NLQueryRequest(BaseModel):
     confidence_threshold: Optional[float] = 0.7
 
 @router.post("/client/query")
-async def client_query(request: NLQueryRequest):
+def client_query(request: NLQueryRequest):
     """
     Client-facing endpoint:
-    - Restricted to safe queries (product search, details)
-    - Formatted output for consumers
+    - Restricted to safe queries (products, orders, status)
+    - Formatted output for consumers (friendly tone)
     """
     try:
         orchestrator = get_pipeline_orchestrator()
@@ -33,11 +34,11 @@ async def client_query(request: NLQueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/admin/query")
-async def admin_query(request: NLQueryRequest):
+def admin_query(request: NLQueryRequest):
     """
     Admin-facing endpoint:
-    - Full SQL access (analytics, sales, users)
-    - Detailed debug info
+    - Full SQL access (analytics, sales, users, forecasting)
+    - Returns SQL, results, and analytical summary
     """
     try:
         # In a real app, verify admin token here

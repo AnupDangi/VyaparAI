@@ -16,6 +16,7 @@ import Cart from "./pages/Cart.tsx";
 import ProductDetails from "./pages/ProductDetails";
 import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
+import ResetPassword from "./pages/ResetPassword";
 import { CartProvider } from "@/context/CartContext";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/product/:id" element={<ProductDetails />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/orders" element={<Orders />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

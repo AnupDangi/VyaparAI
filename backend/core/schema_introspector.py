@@ -11,54 +11,82 @@ class SchemaIntrospector:
     def __init__(self):
         self.db = get_db_manager()
         self._schema_cache = None
-    
+        self.cache_file = "schema_cache.json"
+        
     def introspect(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
-        Introspect database schema and return structured metadata
-        
-        Args:
-            force_refresh: Force re-introspection even if cached
-            
-        Returns:
-            Dictionary with schema metadata including tables, columns, types, constraints
+        Introspect database schema and return structured metadata.
+        Uses local disk cache to speed up startup/queries.
         """
+        import json
+        import os
+        
+        # 1. Try Memory Cache
         if self._schema_cache and not force_refresh:
             return self._schema_cache
+            
+        # 2. Try Disk Cache (if valid and not forced)
+        if not force_refresh and os.path.exists(self.cache_file):
+            try:
+                print("Loading schema from disk cache...")
+                with open(self.cache_file, 'r') as f:
+                    self._schema_cache = json.load(f)
+                return self._schema_cache
+            except Exception as e:
+                print(f"Failed to load disk cache: {e}")
         
         schema = {
             "tables": {},
             "relationships": []
         }
         
-        # Get all tables
-        tables = self._get_tables()
-        
-        for table_name in tables:
-            # Get columns for each table
-            columns = self._get_columns(table_name)
+        # 3. Fetch from DB (Slow Path)
+        print("Introspecting database schema (this may take 10-20s)...")
+        try:
+            with self.db.get_connection() as conn:
+                # ... (Logic remains same, see helper methods)
+                # For brevity in this replacement block, I am relying on the existing code structure below
+                pass 
+                # !!! IMPORTANT: I cannot skip valid code here. I must include the logic or rely on partial replacement.
+                # Since replace_file_content replaces a block, I must provide the full block or be careful.
+                # I will construct the FULL function body to be safe.
+                
+                # Get all tables
+                tables = self._get_tables(conn)
+                
+                for table_name in tables:
+                    columns = self._get_columns(conn, table_name)
+                    primary_keys = self._get_primary_keys(conn, table_name)
+                    foreign_keys = self._get_foreign_keys(conn, table_name)
+                    
+                    schema["tables"][table_name] = {
+                        "name": table_name,
+                        "columns": columns,
+                        "primary_keys": primary_keys,
+                        "foreign_keys": foreign_keys,
+                        "description": self._generate_table_description(table_name, columns)
+                    }
+                
+                schema["relationships"] = self._get_relationships(conn)
+                
+            self._schema_cache = schema
             
-            # Get primary keys
-            primary_keys = self._get_primary_keys(table_name)
+            # Save to Disk
+            try:
+                with open(self.cache_file, 'w') as f:
+                    json.dump(schema, f)
+                print("Schema saved to disk cache.")
+            except Exception as e:
+                print(f"Failed to save disk cache: {e}")
+                
+            return schema
             
-            # Get foreign keys
-            foreign_keys = self._get_foreign_keys(table_name)
-            
-            schema["tables"][table_name] = {
-                "name": table_name,
-                "columns": columns,
-                "primary_keys": primary_keys,
-                "foreign_keys": foreign_keys,
-                "description": self._generate_table_description(table_name, columns)
-            }
-        
-        # Get relationships
-        schema["relationships"] = self._get_relationships()
-        
-        self._schema_cache = schema
-        return schema
+        except Exception as e:
+            print(f"Introspection Error: {e}")
+            return {}
     
-    def _get_tables(self) -> List[str]:
-        """Get all table names from the database"""
+    def _get_tables(self, conn) -> List[str]:
+        """Get all table names"""
         query = """
             SELECT table_name 
             FROM information_schema.tables 
@@ -66,11 +94,13 @@ class SchemaIntrospector:
             AND table_type = 'BASE TABLE'
             ORDER BY table_name
         """
-        results = self.db.execute_query(query)
+        with conn.cursor() as cur:
+            cur.execute(query)
+            results = cur.fetchall()
         return [row['table_name'] for row in results]
     
-    def _get_columns(self, table_name: str) -> List[Dict[str, Any]]:
-        """Get column metadata for a table"""
+    def _get_columns(self, conn, table_name: str) -> List[Dict[str, Any]]:
+        """Get column metadata"""
         query = """
             SELECT 
                 column_name,
@@ -85,7 +115,9 @@ class SchemaIntrospector:
             AND table_name = %s
             ORDER BY ordinal_position
         """
-        results = self.db.execute_query(query, (table_name,))
+        with conn.cursor() as cur:
+            cur.execute(query, (table_name,))
+            results = cur.fetchall()
         
         columns = []
         for row in results:
@@ -100,21 +132,17 @@ class SchemaIntrospector:
                     row['data_type']
                 )
             }
-            
-            # Add length/precision info if available
             if row['character_maximum_length']:
                 column["max_length"] = row['character_maximum_length']
             if row['numeric_precision']:
                 column["precision"] = row['numeric_precision']
             if row['numeric_scale']:
                 column["scale"] = row['numeric_scale']
-            
             columns.append(column)
-        
         return columns
     
-    def _get_primary_keys(self, table_name: str) -> List[str]:
-        """Get primary key columns for a table"""
+    def _get_primary_keys(self, conn, table_name: str) -> List[str]:
+        """Get primary keys"""
         query = """
             SELECT a.attname
             FROM pg_index i
@@ -122,11 +150,13 @@ class SchemaIntrospector:
             WHERE i.indrelid = %s::regclass
             AND i.indisprimary
         """
-        results = self.db.execute_query(query, (table_name,))
+        with conn.cursor() as cur:
+            cur.execute(query, (table_name,))
+            results = cur.fetchall()
         return [row['attname'] for row in results]
     
-    def _get_foreign_keys(self, table_name: str) -> List[Dict[str, str]]:
-        """Get foreign key constraints for a table"""
+    def _get_foreign_keys(self, conn, table_name: str) -> List[Dict[str, str]]:
+        """Get foreign keys"""
         query = """
             SELECT
                 kcu.column_name,
@@ -142,7 +172,9 @@ class SchemaIntrospector:
             WHERE tc.constraint_type = 'FOREIGN KEY'
             AND tc.table_name = %s
         """
-        results = self.db.execute_query(query, (table_name,))
+        with conn.cursor() as cur:
+            cur.execute(query, (table_name,))
+            results = cur.fetchall()
         
         foreign_keys = []
         for row in results:
@@ -151,11 +183,10 @@ class SchemaIntrospector:
                 "references_table": row['foreign_table_name'],
                 "references_column": row['foreign_column_name']
             })
-        
         return foreign_keys
     
-    def _get_relationships(self) -> List[Dict[str, str]]:
-        """Get all foreign key relationships in the database"""
+    def _get_relationships(self, conn) -> List[Dict[str, str]]:
+        """Get all relationships"""
         query = """
             SELECT
                 tc.table_name AS from_table,
@@ -172,7 +203,9 @@ class SchemaIntrospector:
             WHERE tc.constraint_type = 'FOREIGN KEY'
             AND tc.table_schema = 'public'
         """
-        results = self.db.execute_query(query)
+        with conn.cursor() as cur:
+            cur.execute(query)
+            results = cur.fetchall()
         
         relationships = []
         for row in results:
@@ -182,7 +215,6 @@ class SchemaIntrospector:
                 "to_table": row['to_table'],
                 "to_column": row['to_column']
             })
-        
         return relationships
     
     def _generate_table_description(

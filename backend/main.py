@@ -9,7 +9,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 # Ensure 'routers' can be imported regardless of execution directory
+# Ensure 'routers' can be imported regardless of execution directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+
+# Add parent dir to allow 'from backend...' imports to work
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
 if current_dir not in sys.path:
     sys.path.append(current_dir)
 
@@ -22,15 +29,27 @@ except ImportError:
         from backend.routers import auth, products, bookings, customers, ocr, stats
     except ImportError as e:
         print(f"Warning: Could not import routers: {e}")
-        # Proceeding without them for now to allow NL2SQL to work if they are broken
         auth = products = bookings = customers = ocr = stats = None
 
-# Import new NL2SQL router
+# Import new NL2SQL router, Cart Router & Orders Router
 try:
-    from backend.api.routes import router as nl2sql_router
+    from backend.routers.nl2sql import router as nl2sql_router
+    from backend.routers.cart import router as cart_router
+    from backend.routers.orders import router as orders_router
+    from backend.routers.users import router as users_router
 except ImportError:
     # Try relative import if running from backend dir
-    from api.routes import router as nl2sql_router
+    try:
+        from routers.nl2sql import router as nl2sql_router
+        from routers.cart import router as cart_router
+        from routers.orders import router as orders_router
+        from routers.users import router as users_router
+    except ImportError as e:
+        print(f"Warning: Could not import new routers: {e}")
+        nl2sql_router = None
+        cart_router = None
+        orders_router = None
+        users_router = None
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO)
@@ -71,8 +90,21 @@ if auth:
     app.include_router(customers.router, prefix="/api/customers", tags=["customers"])
     app.include_router(ocr.router, prefix="/api/ocr", tags=["ocr"])
 
+# Include Orders Router
+if orders_router:
+    app.include_router(orders_router, prefix="/api/orders", tags=["orders"])
+
 # Include New NL2SQL Router
-app.include_router(nl2sql_router, prefix="/api", tags=["NL to SQL"])
+if nl2sql_router:
+    app.include_router(nl2sql_router, prefix="/api/nl2sql", tags=["NL to SQL"])
+
+# Include Cart Router
+if cart_router:
+    app.include_router(cart_router, prefix="/api/cart", tags=["cart"])
+
+# Include Users Router
+if users_router:
+    app.include_router(users_router, prefix="/api/users", tags=["users"])
 
 @app.get("/")
 async def root():

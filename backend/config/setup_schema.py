@@ -13,6 +13,7 @@ if not DATABASE_URL:
     )
 
 SCHEMA_SQL = """
+
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     clerk_user_id VARCHAR(255) UNIQUE NOT NULL,
@@ -65,6 +66,9 @@ CREATE TABLE IF NOT EXISTS products (
     category VARCHAR(100),
     description TEXT,
     image_url TEXT,
+    store_id INTEGER REFERENCES stores(id),
+    rating DECIMAL(3,2) DEFAULT 0.0,
+    reviews_count INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -84,6 +88,14 @@ CREATE TABLE IF NOT EXISTS orders (
     total_amount DECIMAL(10,2) NOT NULL,
     status VARCHAR(50) DEFAULT 'pending',
     payment_status VARCHAR(50) DEFAULT 'unpaid',
+    
+    -- Snapshot of user details at time of order
+    user_name VARCHAR(255),
+    shipping_address TEXT,
+    shipping_city VARCHAR(100),
+    shipping_pincode VARCHAR(20),
+    contact_phone VARCHAR(20),
+    
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -95,12 +107,62 @@ CREATE TABLE IF NOT EXISTS order_items (
     quantity INTEGER NOT NULL,
     price_at_time DECIMAL(10,2) NOT NULL
 );
+
+-- Denormalized ANALYTICS Table for NL2SQL
+CREATE TABLE IF NOT EXISTS fact_sales (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id),
+    store_id INTEGER REFERENCES stores(id), -- If available
+    
+    -- Facts
+    quantity INTEGER NOT NULL,
+    price_at_time DECIMAL(10,2) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL, -- Line item total
+    
+    -- Dimensions (Snapshots)
+    order_status VARCHAR(50),
+    payment_status VARCHAR(50),
+    
+    user_city VARCHAR(100),
+    user_state VARCHAR(100), -- inferred or stored
+    product_category VARCHAR(100),
+    product_title TEXT,
+    
+
+    sale_date TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS carts (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS cart_items (
+    id SERIAL PRIMARY KEY,
+    cart_id INTEGER REFERENCES carts(id) ON DELETE CASCADE,
+    product_id INTEGER REFERENCES products(id),
+    quantity INTEGER NOT NULL DEFAULT 1,
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(cart_id, product_id)
+);
+
 """
 
 def setup_db():
     try:
         with psycopg.connect(DATABASE_URL) as conn:
             with conn.cursor() as cur:
+                # Drop tables to ensure clean schema update
+                cur.execute("DROP SCHEMA IF EXISTS public CASCADE;")
+                cur.execute("CREATE SCHEMA public;")
+                cur.execute("GRANT ALL ON SCHEMA public TO neondb_owner;")
+                cur.execute("GRANT ALL ON SCHEMA public TO public;")
+                
                 cur.execute(SCHEMA_SQL)
                 conn.commit()
                 print("Database schema applied successfully.")

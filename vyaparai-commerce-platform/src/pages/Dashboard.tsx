@@ -15,10 +15,12 @@ import {
   Sparkles,
   Search,
   MapPin,
+  Package,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { productsAPI, Product } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
+import { ShoppingListUpload } from "@/components/ocr/ShoppingListUpload";
 
 interface Message {
   id: string;
@@ -128,7 +130,7 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     const userMessage: Message = {
       id: Date.now().toString(),
       content,
@@ -138,52 +140,42 @@ const Dashboard = () => {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Simulate AI response with REAL product filtering
-    setTimeout(() => {
-      const lowerContent = content.toLowerCase();
-      let responseContent = "";
-      let products: Product[] = [];
+    // Call Backend API
+    try {
+      const { data, error } = await productsAPI.nlpSearch(content);
 
-      // Simple keyword search
-      const matchedProducts = allProducts.filter(p =>
-        p.title.toLowerCase().includes(lowerContent) ||
-        p.category.toLowerCase().includes(lowerContent) ||
-        p.description?.toLowerCase().includes(lowerContent)
-      );
-
-      if (matchedProducts.length > 0) {
-        responseContent = `I found ${matchedProducts.length} items matching your request!`;
-        products = matchedProducts.slice(0, 5);
-      } else {
-        responseContent = "I couldn't find exactly what you asked for, but here are some popular items:";
-        products = allProducts.slice(0, 4);
-      }
-
-      if (lowerContent.includes("snack") || lowerContent.includes("chips")) {
-        responseContent = "Here are some snack options! 🍿";
-        products = allProducts.filter((p) => p.category.toLowerCase().includes("snack"));
-      } else if (lowerContent.includes("milk") || lowerContent.includes("dairy")) {
-        responseContent = "Fresh dairy products 🥛";
-        products = allProducts.filter((p) => p.category.toLowerCase().includes("dairy"));
+      if (error || !data) {
+        throw new Error(error || "Failed to get response");
       }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: responseContent,
+        content: data.answer || "I found these items for you:",
         role: "assistant",
-        products: products.length > 0 ? products : undefined,
+        products: data.products,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-      setShowProducts(true);
-      // setDisplayedProducts(products); // Don't filter the right panel solely on chat, unless desired. 
-      // Let's keep right panel as "browse" or update it. 
-      // The original code updated displayedProducts. I'll stick to that pattern if it makes sense, 
-      // or allows the user to see what they asked for.
-      if (products.length > 0) setDisplayedProducts(products);
 
+      if (data.products && data.products.length > 0) {
+        setDisplayedProducts(data.products.map((p: any) => ({
+          ...p,
+          id: p.id.toString(), // Ensure ID is string for frontend
+          image: p.image_url || p.image || "https://placehold.co/300x300?text=No+Image"
+        })));
+        setShowProducts(true);
+      }
+    } catch (err) {
+      console.error("Chat Error", err);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: "Sorry, I'm having trouble connecting to the server right now. Please try again.",
+        role: "assistant",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   const handleAddToCart = (productId: string, quantity: number) => {
@@ -211,9 +203,9 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col font-sans">
+    <div className="h-screen bg-background flex flex-col font-sans overflow-hidden">
       {/* ... Header ... */}
-      <header className="sticky top-0 z-50 bg-[#131921] text-white shrink-0">
+      <header className="bg-[#131921] text-white shrink-0 shadow-md z-50">
         <div className="flex items-center gap-4 px-4 h-16 max-w-[1500px] mx-auto">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-1 hover:border border-white/0 hover:border-white p-1 rounded-sm">
@@ -222,11 +214,11 @@ const Dashboard = () => {
           </Link>
 
           {/* Delivery Location */}
-          <div className="hidden md:flex flex-col items-start leading-tight text-xs hover:border border-white/0 hover:border-white p-2 rounded-sm cursor-pointer">
-            <span className="text-gray-300 ml-3">Deliver to {user?.firstName || 'User'}</span>
+          <div className="hidden md:flex flex-col items-start leading-tight text-xs hover:border border-white/0 hover:border-white p-2 rounded-sm cursor-pointer opacity-50">
+            <span className="text-gray-300 ml-3">Deliver to</span>
             <div className="flex items-center gap-1 font-bold">
               <MapPin className="h-4 w-4" />
-              <span>Mumbai 400001</span>
+              <span>{user?.publicMetadata?.address as string || "Select Location"}</span>
             </div>
           </div>
 
@@ -266,10 +258,9 @@ const Dashboard = () => {
           {/* Right Actions */}
           <div className="flex items-center gap-1 md:gap-4">
 
-            {/* Returns & Orders */}
-            <div className="hidden md:flex flex-col leading-tight text-xs hover:border border-white/0 hover:border-white p-2 rounded-sm cursor-pointer">
-              <span className="text-gray-300">Returns</span>
-              <span className="font-bold">& Orders</span>
+            {/* OCR Upload */}
+            <div className="hidden md:block">
+              <ShoppingListUpload allProducts={allProducts} />
             </div>
 
             {/* Profile */}
@@ -284,6 +275,12 @@ const Dashboard = () => {
                 }
               }} />
             </div>
+
+            {/* Orders - NEW */}
+            <Link to="/orders" className="flex items-end hover:border border-white/0 hover:border-white p-2 rounded-sm relative">
+              <Package className="h-7 w-7 md:h-8 md:w-8" />
+              <span className="font-bold hidden md:inline mb-1">Orders</span>
+            </Link>
 
             {/* Cart */}
             <Link to="/cart" className="flex items-end hover:border border-white/0 hover:border-white p-2 rounded-sm relative">
@@ -320,7 +317,7 @@ const Dashboard = () => {
 
         {/* Sidebar */}
         <div
-          className={`fixed lg:static inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:transform-none bg-background border-r border-border w-64 shrink-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          className={`fixed lg:static inset-y-0 left-0 z-50 transform transition-transform duration-300 lg:transform-none bg-background border-r border-border w-64 shrink-0 overflow-y-auto h-full ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
             }`}
         >
           <CategorySidebar
@@ -331,51 +328,56 @@ const Dashboard = () => {
         </div>
 
         {/* Chat + Products Area */}
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden w-full relative z-0">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden w-full relative z-0 h-full">
           {/* Chat Section */}
-          <div className="flex-1 flex flex-col h-full lg:border-r border-border relative">
+          <div className="flex-1 flex flex-col h-full lg:border-r border-border relative bg-gradient-to-b from-background via-background to-secondary/5 overflow-hidden">
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6 scroll-smooth">
               {messages.map((message) => (
-                <div key={message.id}>
+                <div key={message.id} className="max-w-3xl mx-auto w-full">
                   <ChatMessage content={message.content} role={message.role} />
                   {message.products && message.products.length > 0 && (
-                    <div className="ml-11 mt-3 grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="ml-11 mt-4 grid grid-cols-2 sm:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
                       {message.products.slice(0, 3).map((product) => (
-                        <ProductCard
-                          key={product.id}
-                          {...product}
-                          onAddToCart={handleAddToCart}
-                        />
+                        <div key={product.id} className="transform hover:scale-105 transition-transform duration-300">
+                          <ProductCard
+                            {...product}
+                            onAddToCart={handleAddToCart}
+                          />
+                        </div>
                       ))}
                     </div>
                   )}
                 </div>
               ))}
               {isLoading && (
-                <ChatMessage content="" role="assistant" isLoading />
+                <div className="max-w-3xl mx-auto w-full">
+                  <ChatMessage content="" role="assistant" isLoading />
+                </div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Chat Input */}
-            <div className="p-4 border-t border-border bg-card">
+            <div className="shrink-0 p-6 border-t border-border/40 bg-background/95 backdrop-blur-xl z-20 shadow-[0_-1px_15px_-3px_rgba(0,0,0,0.05)]">
               <div className="max-w-3xl mx-auto">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                  <Sparkles className="h-3 w-3" />
-                  <span>Try: "Show me healthy breakfast options" or "I need rice and dal"</span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 px-2">
+                  <Sparkles className="h-3 w-3 text-indigo-500 animate-pulse" />
+                  <span className="font-medium">Try: "Show me healthy breakfast options" or "I need rice and dal"</span>
                 </div>
-                <ChatInput
-                  onSendMessage={handleSendMessage}
-                  disabled={isLoading}
-                  placeholder="What are you looking for today?"
-                />
+                <div className="relative">
+                  <ChatInput
+                    onSendMessage={handleSendMessage}
+                    disabled={isLoading}
+                    placeholder="Ask VyaparAI anything..."
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Products Grid (Desktop Right Panel) */}
-          <div className={`hidden lg:block w-[400px] xl:w-[500px] overflow-y-auto p-6 bg-secondary/30 border-l border-border ${showProducts ? '' : 'hidden'}`}>
+          <div className={`hidden lg:block w-[400px] xl:w-[500px] overflow-y-auto h-full p-6 bg-secondary/30 border-l border-border ${showProducts ? '' : 'hidden'}`}>
             <h3 className="font-serif font-semibold text-foreground mb-4">
               {selectedCategory ? categories.find(c => c.id === selectedCategory)?.name : searchQuery ? "Search Results" : "Featured Categories"}
             </h3>

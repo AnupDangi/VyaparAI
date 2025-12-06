@@ -22,8 +22,11 @@ def main():
         # Create pipeline orchestrator
         pipeline = PipelineOrchestrator()
         
+        # Clear old data
+        pipeline.clear_embeddings()
+        
         # Initialize embeddings
-        pipeline.initialize_embeddings(force_refresh=False)
+        pipeline.initialize_embeddings(force_refresh=True)
         
         print()
         print("=" * 60)

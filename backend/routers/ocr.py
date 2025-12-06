@@ -32,99 +32,71 @@ def preprocess_image(image: Image.Image):
     
     return img_np
 
+
+
+# ... (Previous imports and EasyOCR init remain) ... 
+
 def extract_products_logic(image: Image.Image):
-    """Extract product names and quantities from table image using EasyOCR."""
+    """
+    Extract product names and quantities using EasyOCR only (No LLM).
+    Uses heuristics to parse the text lines.
+    """
     processed = preprocess_image(image)
 
-    # Run EasyOCR - returns list of (bbox, text, confidence)
-    ocr_result = reader.readtext(processed)
-
+    # 1. Raw Text Extraction (EasyOCR)
+    # detail=0 returns a list of strings found
+    ocr_result = reader.readtext(processed, detail=0) 
+    
+    print(f"DEBUG: Raw OCR Result List: {ocr_result}")
+    
     if not ocr_result:
         return []
 
-    # Sort by Y position (rows)
-    sorted_items = sorted(ocr_result, key=lambda x: x[0][0][1])
-
-    # Group into rows
-    rows = []
-    current_row = []
-    current_y = None
-    y_threshold = 60
-
-    for item in sorted_items:
-        bbox = item[0]
-        y = bbox[0][1]
-
-        if current_y is None:
-            current_row.append(item)
-            current_y = y
-        elif abs(y - current_y) <= y_threshold:
-            current_row.append(item)
-        else:
-            rows.append(current_row)
-            current_row = [item]
-            current_y = y
-
-    if current_row:
-        rows.append(current_row)
-
-    products = []
-
-    for row_items in rows:
-        # Sort left to right
-        row_items.sort(key=lambda x: x[0][0][0])
-
-        texts = [item[1].strip() for item in row_items]
-        combined = " ".join(texts).strip()
-
-        # Skip headers
-        lower = combined.lower()
-        clean_text = re.sub(r'[^a-z]', '', lower)
-        header_keywords = ['product', 'prod', 'nduct', 'quantity', 'qty', 'quan', 'quantty', 
-                          'sn', 'serial', 'sno', 'item', 'particular']
-        if any(keyword in clean_text for keyword in header_keywords):
+    # 2. Heuristic Parsing
+    items = []
+    
+    for i, line in enumerate(ocr_result, 1):
+        line = line.strip()
+        if not line:
             continue
-
-        # Extract quantity
-        qty_match = re.search(r"(\d+)", combined)
-        quantity = int(qty_match.group(1)) if qty_match else None
-
-        # Fallback: scan cells right-to-left
-        if quantity is None:
-            for cell in reversed(texts):
-                m = re.search(r"(\d+)", cell)
-                if m:
-                    quantity = int(m.group(1))
-                    break
-
-        if quantity is None:
-            quantity = 1
-
-        # Clean product name
-        product_name = re.sub(r"\d+[a-zA-Z]*", " ", combined)
-        product_name = re.sub(r"\b(kg|g|grams|pcs|pack|packs|packet|packets|ltr|litre|litres|ml)\b", " ", product_name, flags=re.IGNORECASE)
-        product_name = re.sub(r"\s+", " ", product_name).strip()
-
-        # Fallback for product name
-        if (not product_name) and texts:
-            for cell in texts:
-                if not re.fullmatch(r"\s*\d+\s*[a-zA-Z]*\s*", cell):
-                    product_name = cell.strip()
-                    break
-            if not product_name:
-                product_name = texts[0].strip()
-
+            
+        # Heuristic: Try to find a number in the line for quantity
+        # Patterns: "2 kg Rice", "Rice 2kg", "2 Rice", "Rice 2"
+        
+        # Check for leading number
+        match_leading = re.match(r'^(\d+)\s*(kg|g|l|ml|pack|pc|pcs)?\s+(.+)$', line, re.IGNORECASE)
+        # Check for trailing number
+        match_trailing = re.search(r'(.+?)\s+(\d+)\s*(kg|g|l|ml|pack|pc|pcs)?$', line, re.IGNORECASE)
+        
+        quantity = 1
+        product_name = line
+        
+        if match_leading:
+            qty_str = match_leading.group(1)
+            product_name = match_leading.group(3)
+            try:
+                quantity = int(qty_str)
+            except:
+                pass
+        elif match_trailing:
+            qty_str = match_trailing.group(2)
+            product_name = match_trailing.group(1)
+            try:
+                quantity = int(qty_str)
+            except:
+                pass
+        
+        # Clean up product name (remove special chars if any)
+        product_name = re.sub(r'[^\w\s]', '', product_name).strip()
+        
         if product_name:
-            products.append({
+            items.append({
+                "sn": str(len(items) + 1),
                 "product": product_name,
-                "quantity": int(quantity)
+                "quantity": quantity
             })
-
-    # Add SN
-    for i, product in enumerate(products, 1):
-        product["sn"] = str(i)
-
-    return products
+            
+    return items
 
 @router.post("/extract")
 async def extract_text(file: UploadFile = File(...)):
@@ -138,10 +110,9 @@ async def extract_text(file: UploadFile = File(...)):
             "items": items,
             "total_items": len(items)
         })
-    
     except Exception as e:
-        import traceback
-        raise HTTPException(status_code=500, detail=f"OCR error: {str(e)}")
+        print(f"OCR Endpoint Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/debug")
 async def debug_ocr(file: UploadFile = File(...)):
