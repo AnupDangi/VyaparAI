@@ -67,7 +67,8 @@ app = FastAPI(
 # CORS Setup
 origins = [
     "http://localhost:8080", 
-    "https://vyaparaishop.vercel.app"
+    "https://vyaparaishop.vercel.app",
+    "https://vyaparai.onrender.com",
     # Allow all for development flexibility
 ]
 
