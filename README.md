@@ -80,7 +80,14 @@ VyaparAI/
     pip install -r requirements.txt
     python main.py
     ```
-    *Create a `.env` file in `backend/` with configs for DATABASE_URL, GEMINI_API_KEY, etc.*
+    *Create a `.env` file in `backend/` with configs for DATABASE_URL,
+    DATABASE_URL=
+    CLOUDINARY_API_SECRET=
+    CLOUDINARY_API_KEY=
+    GROQ_API_KEY=
+    QDRANT_API_KEY=
+    QDRANT_URL=
+*
 
 3.  **Frontend Setup**
     ```bash
