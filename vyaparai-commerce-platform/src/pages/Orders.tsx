@@ -73,8 +73,8 @@ export default function Orders() {
                                 </CardHeader>
                                 <CardContent className="pt-6">
                                     <div className="space-y-4">
-                                        {order.items.map((item: any) => (
-                                            <div key={item.id} className="flex items-center gap-4">
+                                        {order.items.map((item: any, index: number) => (
+                                            <div key={item.id || index} className="flex items-center gap-4">
                                                 <img src={item.image_url} alt={item.title} className="w-16 h-16 object-cover rounded border" />
                                                 <div className="flex-1">
                                                     <h4 className="font-medium line-clamp-1">{item.title}</h4>

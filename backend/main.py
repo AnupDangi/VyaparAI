@@ -67,7 +67,7 @@ app = FastAPI(
 # CORS Setup
 origins = [
     "http://localhost:8080", 
-    "https://vyaparaishop.vercel.app"
+    # "https://vyaparaishop.vercel.app"
     # Allow all for development flexibility
 ]
 
@@ -95,6 +95,10 @@ if orders_router:
 # Include New NL2SQL Router
 if nl2sql_router:
     app.include_router(nl2sql_router, prefix="/api/nl2sql", tags=["NL to SQL"])
+
+# Include OCR Router
+if ocr:
+    app.include_router(ocr.router, prefix="/api/ocr", tags=["ocr"])
 
 # Include Cart Router
 if cart_router:

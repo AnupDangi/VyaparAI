@@ -123,6 +123,9 @@ export function ShoppingListUpload({ allProducts }: ShoppingListUploadProps) {
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Upload Shopping List</DialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                        Upload an image of your handwritten or printed shopping list to automatically add items to your cart.
+                    </div>
                 </DialogHeader>
 
                 <div className="space-y-4">

@@ -98,7 +98,7 @@ def extract_products_logic(image: Image.Image):
             
     return items
 
-@router.post("/extract")
+@router.post("/upload")
 async def extract_text(file: UploadFile = File(...)):
     try:
         contents = await file.read()
