@@ -188,12 +188,12 @@ def get_user_orders(user_ident: str):
                 oid, total, status, date = row
                 # Get items
                 cur.execute("""
-                    SELECT oi.quantity, p.title, p.image_url
+                    SELECT oi.quantity, p.title, p.image_url, oi.price_at_time
                     FROM order_items oi JOIN products p ON oi.product_id = p.id
                     WHERE oi.order_id = %s
                 """, (oid,))
-                # Return items with images
-                items = [{"quantity": r[0], "title": r[1], "image": r[2]} for r in cur.fetchall()]
+                # Return items with images and price
+                items = [{"quantity": r[0], "title": r[1], "image_url": r[2], "price": float(r[3])} for r in cur.fetchall()]
                 
                 orders.append({
                     "id": oid,

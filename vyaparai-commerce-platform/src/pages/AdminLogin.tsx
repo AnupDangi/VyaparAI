@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Shield, Lock, ArrowRight, User } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { API_BASE_URL } from "@/lib/api";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ const AdminLogin = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/admin/login', {
+      const response = await fetch(`${API_BASE_URL}/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminId, password })

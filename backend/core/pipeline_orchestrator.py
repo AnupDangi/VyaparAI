@@ -52,7 +52,7 @@ class PipelineOrchestrator:
         else:
             print("Failed to generate embeddings (Check API Key?)")
 
-    def process_query(self, question: str, max_retries: int = 3, confidence_threshold: float = 0.7, mode: str = "admin") -> Dict[str, Any]:
+    def process_query(self, question: str, max_retries: int = 3, confidence_threshold: float = 0.7, mode: str = "admin", store_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Process User Query
         Mode: 'admin' (full access) or 'client' (restricted)
@@ -117,7 +117,7 @@ class PipelineOrchestrator:
             ===========================
             
             USER PERMISSIONS:
-            1. Product browsing (title, price, category, description, image_url, availability > 0) - NO exact stock.
+            1. Product browsing (id, title, price, category, description, image_url, availability > 0) - Always select 'id' for linking.
             2. Own order history (products bought, quantity, time).
             3. Category listing.
             Users CANNOT see: exact stock, revenue/stats, other users, admin tables.
@@ -140,7 +140,17 @@ class PipelineOrchestrator:
                     "Only allow filtering 'products' by visible columns."
                 )
             else:
-                mode_instruction = "Role: ADMIN. Full access granted. Return JSON format with 'description' and 'sql'."
+                if store_id:
+                    mode_instruction = (
+                        f"Role: STORE ADMIN (ID: {store_id}).\n"
+                        f"You MUST restrict all data to Store ID {store_id}.\n"
+                        f" - For 'products', 'bookings', 'fact_sales', append: WHERE store_id = {store_id}\n"
+                        f" - For 'orders', DO NOT use 'orders' table directly (it has no store_id). Use 'fact_sales' instead to calculate revenue/counts.\n"
+                        f" - If joining tables, ensure the store isolation is preserved.\n"
+                        f" - Example: SELECT SUM(total_amount) FROM fact_sales WHERE store_id = {store_id}"
+                    )
+                else:
+                    mode_instruction = "Role: SUPER ADMIN. Full access granted. Return JSON format with 'description' and 'sql'."
 
             sql_result = self.sql_generator.generate(
                 question=f"{secure_prompt_context}\n{mode_instruction}\nQuestion: {question}",
@@ -149,9 +159,15 @@ class PipelineOrchestrator:
             )
             
             # 3b. Security Validation (Hard Check)
+            # 3b. Security Validation (Hard Check)
             if mode == "client":
                 if not self._validate_client_sql(sql_result.get('sql', '')):
-                    return {"answer": "I cannot access that information."}
+                    return {
+                        "question": question,
+                        "answer": "I cannot access that information.",
+                        "products": [],
+                        "sql": None
+                    }
 
             sql = sql_result.get('sql', sql_result) if isinstance(sql_result, dict) else sql_result
             if isinstance(sql, str):
@@ -166,7 +182,12 @@ class PipelineOrchestrator:
             )
             
             if not debug_res['success']:
-                return {"answer": f"I couldn't process that query. Error: {debug_res.get('error')}"}
+                return {
+                    "question": question,
+                    "answer": f"I couldn't process that query. Error: {debug_res.get('error')}",
+                    "products": [],
+                    "sql": None
+                }
                 
             results = debug_res['results']
             final_sql = debug_res['sql']
@@ -211,24 +232,17 @@ class PipelineOrchestrator:
 
     def _validate_client_sql(self, sql: str) -> bool:
         """
-        Check if SQL is safe for client.
-        Blocks access to users, admins, stats.
-        Uses Regex to handle quoting and schemas.
+        Check if selfective logic blocks forbidden tables.
         """
         import re
         sql_lower = sql.lower()
         forbidden_tables = ['users', 'admins', 'stores', 'fact_sales', 'revenue', 'admin_password_reset_tokens']
         
         for table in forbidden_tables:
-            # Matches: FROM users, FROM "users", FROM public.users, JOIN users, etc.
-            # \b matches word boundary.
-            # We look for (FROM or JOIN) followed by optional schema/quotes, then table name
             pattern = r'\b(from|join)\s+(?:["\[\]]?\w+["\[\]]?\.)?["\[\]]?' + table + r'["\[\]]?\b'
-            
             if re.search(pattern, sql_lower):
                 print(f"⚠️ Security Block: Attempted access to {table}")
                 return False
-                
         return True
 
     def _generate_summary(self, question, results, mode):

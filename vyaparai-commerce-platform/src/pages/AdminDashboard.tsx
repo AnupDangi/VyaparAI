@@ -17,6 +17,7 @@ import {
   BarChart3,
   Menu,
   X,
+  Loader2,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -46,6 +47,22 @@ const AdminDashboard = () => {
 
   const [categoryStats, setCategoryStats] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+
+  // Products State
+  const [products, setProducts] = useState<any[]>([]);
+  const [isProductLoading, setIsProductLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // For add product
+  const [deletingId, setDeletingId] = useState<number | null>(null); // For delete product
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    title: "",
+    price: "",
+    stock: "",
+    category: "",
+    description: "",
+  });
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   // Chat State
   const [messages, setMessages] = useState<Message[]>([
@@ -66,36 +83,78 @@ const AdminDashboard = () => {
     scrollToBottom();
   }, [messages]);
 
+  const fetchStats = async (storeId?: number) => {
+    if (!storeId && admin?.storeId) storeId = admin.storeId;
+    if (!storeId) return;
+
+    setIsStatsLoading(true);
+
+    const { data } = await adminAPI.getStats(storeId);
+    if (data) setStats(data);
+
+    const { data: catData } = await adminAPI.getCategoryPerformance(storeId);
+    if (catData) setCategoryStats(catData);
+
+    const { data: actData } = await adminAPI.getRecentActivity(storeId);
+    if (actData) setRecentActivity(actData);
+
+    setIsStatsLoading(false);
+  };
+
+  /* Fetch Products */
+  const fetchProducts = async (storeId?: number) => {
+    if (!storeId && admin?.storeId) storeId = admin.storeId;
+    if (!storeId) return;
+
+    // Only set loading on initial fetch if products are empty
+    if (products.length === 0) setIsProductLoading(true);
+
+    const { data } = await productsAPI.getAll(storeId);
+    if (data) {
+      setProducts(data);
+    }
+    setIsProductLoading(false);
+  };
+
   useEffect(() => {
     const storedAdmin = localStorage.getItem('admin');
     if (storedAdmin) {
-      setAdmin(JSON.parse(storedAdmin));
+      const parsedAdmin = JSON.parse(storedAdmin);
+      setAdmin(parsedAdmin);
+      // Fetch data only after we have the admin
+      if (parsedAdmin.storeId) {
+        fetchStats(parsedAdmin.storeId);
+        fetchProducts(parsedAdmin.storeId);
+      }
     }
-    fetchStats();
-    fetchProducts();
   }, []);
 
-  const fetchStats = async () => {
-    const { data } = await adminAPI.getStats();
-    if (data) setStats(data);
-
-    const { data: catData } = await adminAPI.getCategoryPerformance();
-    if (catData) setCategoryStats(catData);
-
-    const { data: actData } = await adminAPI.getRecentActivity();
-    if (actData) setRecentActivity(actData);
-  };
-
   /* AI Logic */
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     const userMessage: Message = { id: Date.now().toString(), content, role: "user" };
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
-    setTimeout(() => {
-      const assistantMessage: Message = { id: (Date.now() + 1).toString(), content: "AI is processing...", role: "assistant" };
+
+    try {
+      const { data, error } = await adminAPI.nlpQuery(content, admin?.storeId);
+
+      let aiResponse = "I couldn't process that.";
+      if (error) {
+        aiResponse = `Error: ${error}`;
+      } else if (data) {
+        aiResponse = data.answer;
+      }
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: aiResponse,
+        role: "assistant"
+      };
       setMessages((prev) => [...prev, assistantMessage]);
-      setIsLoading(false);
-    }, 1000);
+    } catch (e) {
+      setMessages((prev) => [...prev, { id: Date.now().toString(), content: "Network Error", role: "assistant" }]);
+    }
+    setIsLoading(false);
   };
 
   const handleLogout = () => {
@@ -104,35 +163,16 @@ const AdminDashboard = () => {
     navigate("/");
   };
 
-  /* Products State */
-  const [products, setProducts] = useState<any[]>([]);
-  const [isProductLoading, setIsProductLoading] = useState(false);
-  const [showAddProduct, setShowAddProduct] = useState(false);
-  const [newProduct, setNewProduct] = useState({
-    title: "",
-    price: "",
-    stock: "",
-    category: "",
-    description: "",
-  });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-
-  /* Fetch Products */
-  const fetchProducts = async () => {
-    setIsProductLoading(true);
-    const { data } = await productsAPI.getAll();
-    if (data) {
-      setProducts(data);
-    }
-    setIsProductLoading(false);
-  };
-
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return; // Prevent double submit
+
     if (!imageFile) {
       toast({ title: "Image Required", description: "Please upload a product image", variant: "destructive" });
       return;
     }
+
+    setIsSubmitting(true);
 
     const formData = new FormData();
     formData.append("title", newProduct.title);
@@ -140,6 +180,14 @@ const AdminDashboard = () => {
     formData.append("stock", newProduct.stock);
     formData.append("category", newProduct.category);
     formData.append("description", newProduct.description);
+
+    if (admin?.storeId) {
+      formData.append("store_id", admin.storeId.toString());
+    } else {
+      toast({ title: "Error", description: "Admin State Missing. Please relogin.", variant: "destructive" });
+      setIsSubmitting(false);
+      return;
+    }
     formData.append("image", imageFile);
 
     const { error } = await productsAPI.create(formData);
@@ -150,21 +198,26 @@ const AdminDashboard = () => {
       setShowAddProduct(false);
       setNewProduct({ title: "", price: "", stock: "", category: "", description: "" });
       setImageFile(null);
-      fetchProducts();
-      fetchStats(); // Update stats after adding product
+      fetchProducts(admin.storeId);
+      fetchStats(admin.storeId); // Update stats after adding product
     }
+    setIsSubmitting(false);
   };
 
   const handleDeleteProduct = async (id: number) => {
+    if (deletingId) return; // Prevent concurrent deletes? Or allow parallel? Better safe.
     if (!confirm("Are you sure?")) return;
+
+    setDeletingId(id);
     const { error } = await productsAPI.delete(id);
     if (error) {
       toast({ title: "Error", description: error, variant: "destructive" });
     } else {
       toast({ title: "Deleted", description: "Product removed" });
-      fetchProducts();
-      fetchStats();
+      fetchProducts(admin.storeId);
+      fetchStats(admin.storeId);
     }
+    setDeletingId(null);
   };
 
   return (
@@ -180,7 +233,7 @@ const AdminDashboard = () => {
             >
               {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/admin/dashboard" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <Shield className="h-4 w-4" />
               </div>
@@ -204,140 +257,244 @@ const AdminDashboard = () => {
       <div className="container py-6 lg:py-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <StatsCard
-            title="Total Users"
-            value={stats.totalUsers.toLocaleString()}
-            icon={Users}
-            trend={{ value: 12.5, isPositive: true }}
-          />
-          <StatsCard
-            title="Total Revenue"
-            value={`₹${stats.totalRevenue.toLocaleString()}`}
-            icon={TrendingUp}
-            trend={{ value: 8.2, isPositive: true }}
-          />
-          <StatsCard
-            title="Orders Today"
-            value={stats.ordersToday.toString()}
-            icon={ShoppingBag}
-            trend={{ value: 3.1, isPositive: true }}
-          />
-          <StatsCard
-            title="Low Stock Items"
-            value={stats.lowStockItems.toString()}
-            icon={AlertTriangle}
-            trend={{ value: 5, isPositive: false }}
-          />
+          {isStatsLoading ? (
+            Array(4).fill(0).map((_, i) => (
+              <Card key={i} className="animate-pulse">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div className="h-4 bg-muted rounded w-1/2"></div>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-8 bg-muted rounded w-3/4 mb-2"></div>
+                  <div className="h-4 bg-muted rounded w-1/4"></div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <>
+              <StatsCard
+                title="Total Users"
+                value={stats.totalUsers.toLocaleString()}
+                icon={Users}
+                trend={{ value: 12.5, isPositive: true }}
+              />
+              <StatsCard
+                title="Total Revenue"
+                value={`₹${stats.totalRevenue.toLocaleString()}`}
+                icon={TrendingUp}
+                trend={{ value: 8.2, isPositive: true }}
+              />
+              <StatsCard
+                title="Orders Today"
+                value={stats.ordersToday.toString()}
+                icon={ShoppingBag}
+                trend={{ value: 3.1, isPositive: true }}
+              />
+              <StatsCard
+                title="Low Stock Items"
+                value={stats.lowStockItems.toString()}
+                icon={AlertTriangle}
+                trend={{ value: 5, isPositive: false }}
+              />
+            </>
+          )}
         </div>
 
         {/* INVENTORY MANAGEMENT SECTION */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold">Inventory Management</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold">Inventory Management</h2>
             <Button onClick={() => setShowAddProduct(!showAddProduct)}>
-              {showAddProduct ? "Cancel" : "Add New Product"}
+              {showAddProduct ? <X className="h-4 w-4 mr-2" /> : <TrendingUp className="h-4 w-4 mr-2" />}
+              {showAddProduct ? "Cancel" : "Add Product"}
             </Button>
           </div>
 
+          {/* Add Product Form */}
           {showAddProduct && (
-            <Card className="mb-6 border-primary/50">
-              <CardHeader><CardTitle>Add New Product</CardTitle></CardHeader>
+            <Card className="mb-6 animate-fade-up">
+              <CardHeader>
+                <CardTitle>Add New Product</CardTitle>
+              </CardHeader>
               <CardContent>
                 <form onSubmit={handleCreateProduct} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input className="p-2 border rounded bg-background" placeholder="Product Title" value={newProduct.title} onChange={e => setNewProduct({ ...newProduct, title: e.target.value })} required />
-                    <input className="p-2 border rounded bg-background" placeholder="Price (₹)" type="number" value={newProduct.price} onChange={e => setNewProduct({ ...newProduct, price: e.target.value })} required />
-                    <input className="p-2 border rounded bg-background" placeholder="Stock Quantity" type="number" value={newProduct.stock} onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })} required />
-                    <input className="p-2 border rounded bg-background" placeholder="Category" value={newProduct.category} onChange={e => setNewProduct({ ...newProduct, category: e.target.value })} required />
-
-                    <div className="col-span-1 md:col-span-2">
-                      <label className="block text-sm font-medium mb-1">Product Image</label>
-                      <ImageUpload
-                        value={imageFile}
-                        onChange={setImageFile}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Product Title</label>
+                      <input
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                        placeholder="e.g. Organic Brown Rice"
+                        value={newProduct.title}
+                        onChange={(e) => setNewProduct({ ...newProduct, title: e.target.value })}
+                        required
                       />
                     </div>
-                    <textarea className="p-2 border rounded bg-background col-span-2" placeholder="Description" value={newProduct.description} onChange={e => setNewProduct({ ...newProduct, description: e.target.value })} required />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Price (₹)</label>
+                      <input
+                        type="number"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                        placeholder="e.g. 120"
+                        value={newProduct.price}
+                        onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Stock Quantity</label>
+                      <input
+                        type="number"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                        placeholder="e.g. 50"
+                        value={newProduct.stock}
+                        onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Category</label>
+                      <input
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                        placeholder="e.g. Grains"
+                        value={newProduct.category}
+                        onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                        required
+                      />
+                    </div>
                   </div>
-                  <Button type="submit" disabled={isProductLoading}>
-                    {isProductLoading ? "Uploading..." : "Save Product"}
-                  </Button>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Description</label>
+                    <textarea
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                      placeholder="Product details..."
+                      value={newProduct.description}
+                      onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Product Image</label>
+                    <ImageUpload
+                      value={imageFile}
+                      onChange={(file) => setImageFile(file)}
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={isSubmitting}>
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        "Add Product"
+                      )}
+                    </Button>
+                  </div>
                 </form>
               </CardContent>
             </Card>
           )}
 
+          {/* Product List */}
           <Card>
-            <CardHeader><CardTitle>Product List</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle>Current Inventory</CardTitle>
+            </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs uppercase bg-muted/50">
-                    <tr>
-                      <th className="px-4 py-3">Image</th>
-                      <th className="px-4 py-3">Title</th>
-                      <th className="px-4 py-3">Category</th>
-                      <th className="px-4 py-3">Price</th>
-                      <th className="px-4 py-3">Stock</th>
-                      <th className="px-4 py-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {products.length === 0 ? (
-                      <tr><td colSpan={6} className="text-center py-4">No products found. Add one!</td></tr>
-                    ) : products.map((prod: any) => (
-                      <tr key={prod.id} className="border-b hover:bg-muted/50">
-                        <td className="px-4 py-3">
-                          <img src={prod.image_url} alt={prod.title} className="w-10 h-10 object-cover rounded" />
-                        </td>
-                        <td className="px-4 py-3 font-medium">{prod.title}</td>
-                        <td className="px-4 py-3">{prod.category}</td>
-                        <td className="px-4 py-3">₹{prod.price}</td>
-                        <td className="px-4 py-3">{prod.stock}</td>
-                        <td className="px-4 py-3">
-                          <Button variant="destructive" size="sm" onClick={() => handleDeleteProduct(prod.id)}>Delete</Button>
-                        </td>
+              {isProductLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading inventory...</div>
+              ) : products.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No products found. Start by adding one!
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50 transition-colors hover:bg-muted/50">
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Image</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Name</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Category</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Price</th>
+                        <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">Stock</th>
+                        <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {products.map((p) => (
+                        <tr key={p.id} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
+                          <td className="p-4 align-middle">
+                            <img
+                              src={p.image_url || "https://placehold.co/50"}
+                              alt={p.title}
+                              className="h-10 w-10 rounded object-cover"
+                            />
+                          </td>
+                          <td className="p-4 align-middle font-medium">{p.title}</td>
+                          <td className="p-4 align-middle">{p.category}</td>
+                          <td className="p-4 align-middle">₹{p.price}</td>
+                          <td className="p-4 align-middle">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${p.stock < 10 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+                              }`}>
+                              {p.stock} units
+                            </span>
+                          </td>
+                          <td className="p-4 align-middle text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDeleteProduct(p.id)}
+                              disabled={deletingId === p.id}
+                            >
+                              {deletingId === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <TrendingUp className="h-4 w-4 rotate-180" />}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+        {/* Skipping inventory part for brevity in this replace block, resuming at grid */}
 
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* ... Existing AI & Recent Activity ... */}
+          {/* ... AI Section ... */}
           {/* AI Query Section */}
-          <Card className="lg:col-span-1">
-            <CardHeader className="pb-3">
+          <Card className="lg:col-span-1 flex flex-col h-[600px]">
+            <CardHeader className="border-b">
               <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
+                <BarChart3 className="h-5 w-5 text-primary" />
                 AI Analytics Assistant
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="h-[400px] flex flex-col">
-                <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
-                  {messages.map((message) => (
-                    <ChatMessage
-                      key={message.id}
-                      content={message.content}
-                      role={message.role}
-                    />
-                  ))}
-                  {isLoading && (
-                    <ChatMessage content="" role="assistant" isLoading />
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-                <ChatInput
-                  onSendMessage={handleSendMessage}
-                  disabled={isLoading}
-                  placeholder="Ask about sales, users, revenue..."
+            <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[400px]">
+              {messages.map((msg) => (
+                <ChatMessage
+                  key={msg.id}
+                  content={msg.content}
+                  role={msg.role}
                 />
-              </div>
+              ))}
+              {isLoading && (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm p-2 bg-secondary/50 rounded-lg w-fit">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Analyzing store data...
+                </div>
+              )}
+              <div ref={messagesEndRef} />
             </CardContent>
+            <div className="p-4 border-t bg-secondary/10">
+              <ChatInput
+                onSendMessage={handleSendMessage}
+                disabled={isLoading}
+                placeholder="Ask about revenue, users, or top products..."
+              />
+            </div>
           </Card>
 
           {/* Quick Stats */}
@@ -352,7 +509,17 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {categoryStats.length === 0 ? (
+                  {isStatsLoading ? (
+                    Array(3).fill(0).map((_, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg animate-pulse">
+                        <div className="space-y-2 w-1/2">
+                          <div className="h-4 bg-muted rounded w-2/3"></div>
+                          <div className="h-3 bg-muted rounded w-1/3"></div>
+                        </div>
+                        <div className="h-6 bg-muted rounded w-16"></div>
+                      </div>
+                    ))
+                  ) : categoryStats.length === 0 ? (
                     <p className="text-muted-foreground text-sm">No category data yet.</p>
                   ) : categoryStats.map((category) => (
                     <div key={category.name} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
@@ -380,7 +547,17 @@ const AdminDashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {recentActivity.length === 0 ? (
+                  {isStatsLoading ? (
+                    Array(4).fill(0).map((_, i) => (
+                      <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0 animate-pulse">
+                        <div className="flex items-center gap-3 w-3/4">
+                          <div className="h-2 w-2 rounded-full bg-muted"></div>
+                          <div className="h-4 bg-muted rounded w-full"></div>
+                        </div>
+                        <div className="h-3 bg-muted rounded w-12"></div>
+                      </div>
+                    ))
+                  ) : recentActivity.length === 0 ? (
                     <p className="text-muted-foreground text-sm">No recent activity.</p>
                   ) : recentActivity.map((activity, index) => (
                     <div key={index} className="flex items-center justify-between py-2 border-b border-border last:border-0">

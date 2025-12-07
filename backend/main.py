@@ -67,10 +67,8 @@ app = FastAPI(
 # CORS Setup
 origins = [
     "http://localhost:8080", 
-    "http://localhost:8081", 
-    "http://localhost:5173", 
-    "http://localhost:3000",
-    "*" # Allow all for development flexibility
+    "https://vyaparaishop.vercel.app"
+    # Allow all for development flexibility
 ]
 
 app.add_middleware(

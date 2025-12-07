@@ -18,7 +18,7 @@ import {
   Package,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { productsAPI, Product } from "@/lib/api";
+import { Product, productsAPI, API_URL } from "@/lib/api";
 import { useCart } from "@/context/CartContext";
 import { ShoppingListUpload } from "@/components/ocr/ShoppingListUpload";
 
@@ -110,7 +110,7 @@ const Dashboard = () => {
     if (user) {
       const syncUser = async () => {
         try {
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+          // ... inside component ...
           await fetch(`${API_URL}/users/sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -130,28 +130,33 @@ const Dashboard = () => {
     }
   }, [user]);
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim()) return;
+
+    // Optimistic UI Update
     const userMessage: Message = {
       id: Date.now().toString(),
-      content,
+      content: text,
       role: "user",
     };
-
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    // Call Backend API
     try {
-      const { data, error } = await productsAPI.nlpSearch(content);
+      const { data, error } = await productsAPI.nlpSearch(text);
 
-      if (error || !data) {
-        throw new Error(error || "Failed to get response");
+      if (error) {
+        throw new Error(error);
+      }
+
+      if (!data) {
+        throw new Error("No data received from server");
       }
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: data.answer || "I found these items for you:",
-        role: "assistant",
+        role: "assistant", // "system" is not valid in Message type usually, assume assistant
         products: data.products,
       };
 
@@ -165,12 +170,13 @@ const Dashboard = () => {
         })));
         setShowProducts(true);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Chat Error", err);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: "Sorry, I'm having trouble connecting to the server right now. Please try again.",
+        content: `Error: ${err.message || "Trouble connecting to the server."}`,
         role: "assistant",
+        // isError: true, // You might need to add this property to Message type if you want styling
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {

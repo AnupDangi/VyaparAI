@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Loader2, Camera, Upload, Check, X, AlertCircle } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { toast } from "@/hooks/use-toast";
-import { Product } from "@/lib/api";
+import { Product, API_URL } from "@/lib/api";
 
 interface ShoppingListUploadProps {
     allProducts: Product[];
@@ -52,8 +52,7 @@ export function ShoppingListUpload({ allProducts }: ShoppingListUploadProps) {
         formData.append("file", file);
 
         try {
-            const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
-            const response = await fetch(`${API_URL}/ocr/extract`, {
+            const response = await fetch(`${API_URL}/ocr/upload`, {
                 method: "POST",
                 body: formData,
             });

@@ -80,10 +80,11 @@ def admin_login(creds: AdminLoginRequest):
             if not admin or not pass_context.verify(creds.password, admin['password_hash']):
                 raise HTTPException(status_code=401, detail="Invalid credentials")
             
-            # Fetch Store Name
-            cur.execute("SELECT name FROM stores WHERE admin_id = %s", (admin['id'],))
+            # Fetch Store Name and ID
+            cur.execute("SELECT id, name FROM stores WHERE admin_id = %s", (admin['id'],))
             store = cur.fetchone()
             store_name = store['name'] if store else "Vyapar Store"
+            store_id = store['id'] if store else None
 
             return {
                 "success": True, 
@@ -92,7 +93,8 @@ def admin_login(creds: AdminLoginRequest):
                     "id": admin['id'],
                     "name": admin['name'],
                     "email": admin['email'],
-                    "storeName": store_name
+                    "storeName": store_name,
+                    "storeId": store_id
                 }
             }
     except HTTPException as he:

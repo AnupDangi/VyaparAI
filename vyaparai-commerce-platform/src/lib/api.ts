@@ -1,7 +1,9 @@
 // API utilities for VyaparAI
 // These functions are placeholders that will be connected to FastAPI backend
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// USE THIS CONSTANT EVERYWHERE
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const API_URL = `${API_BASE_URL}/api`;
 
 // Generic fetch wrapper with error handling
 async function fetchAPI<T>(
@@ -15,7 +17,8 @@ async function fetchAPI<T>(
       ...options?.headers,
     };
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    // endpoint should start with / e.g. /products
+    const response = await fetch(`${API_URL}${endpoint}`, {
       headers,
       ...options,
     });
@@ -66,6 +69,7 @@ export interface User {
 
 export interface NLPQueryResponse {
   message: string;
+  answer: string; // From backend
   products?: Product[];
   analytics?: Record<string, unknown>;
   chart?: {
@@ -114,8 +118,9 @@ export const authAPI = {
 // Products APIs
 export const productsAPI = {
   // Get all products
-  getAll: async () => {
-    return fetchAPI<Product[]>('/products/');
+  getAll: async (storeId?: number) => {
+    const query = storeId ? `?store_id=${storeId}` : '';
+    return fetchAPI<Product[]>(`/products/${query}`);
   },
 
   // Get single product
@@ -212,40 +217,43 @@ export const cartAPI = {
 // Admin APIs
 export const adminAPI = {
   // Get dashboard stats
-  getStats: async () => {
+  getStats: async (storeId?: number) => {
+    const query = storeId ? `?store_id=${storeId}` : '';
     return fetchAPI<{
       totalUsers: number;
       totalRevenue: number;
       ordersToday: number;
       lowStockItems: number;
-    }>('/admin/stats');
+    }>(`/admin/stats${query}`);
   },
 
   // NLP query for analytics
-  nlpQuery: async (query: string) => {
-    return fetchAPI<NLPQueryResponse>('/admin/nlp-query', {
+  nlpQuery: async (query: string, storeId?: number) => {
+    return fetchAPI<NLPQueryResponse>('/nl2sql/admin/query', {
       method: 'POST',
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ question: query, store_id: storeId }),
     });
   },
 
   // Get category performance
-  getCategoryPerformance: async () => {
+  getCategoryPerformance: async (storeId?: number) => {
+    const query = storeId ? `?store_id=${storeId}` : '';
     return fetchAPI<{
       name: string;
       revenue: number;
       orders: number;
       growth: number;
-    }[]>('/admin/categories/performance');
+    }[]>(`/admin/categories/performance${query}`);
   },
 
   // Get recent activity
-  getRecentActivity: async () => {
+  getRecentActivity: async (storeId?: number) => {
+    const query = storeId ? `?store_id=${storeId}` : '';
     return fetchAPI<{
       action: string;
       time: string;
       type: 'order' | 'user' | 'alert' | 'success';
-    }[]>('/admin/activity');
+    }[]>(`/admin/activity${query}`);
   },
 
   // Get low stock items

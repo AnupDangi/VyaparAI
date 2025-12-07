@@ -38,5 +38,20 @@ logs/
 .DS_Store
 Thumbs.db
 
-*__pycache__
-.pytest_cache
+
+# Testing
+.pytest_cache/
+tests/
+test/
+
+# Application Specific
+schema_cache.json
+vector_store/
+qdrant_storage/
+collection/
+storage/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class

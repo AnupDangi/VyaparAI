@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import MainLayout from "@/components/layout/MainLayout";
 import { toast } from "@/hooks/use-toast";
-import { adminAPI } from "@/lib/api";
+import { adminAPI, API_BASE_URL } from "@/lib/api";
 
 const adminSignupSchema = z.object({
     // Admin Credentials
@@ -76,7 +76,7 @@ export default function AdminSignup() {
         setIsSubmitting(true);
 
         try {
-            const response = await fetch('http://localhost:8000/admin/signup', {
+            const response = await fetch(`${API_BASE_URL}/admin/signup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)

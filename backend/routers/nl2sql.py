@@ -13,6 +13,7 @@ class NLQueryRequest(BaseModel):
     question: str
     max_retries: Optional[int] = 3
     confidence_threshold: Optional[float] = 0.7
+    store_id: Optional[int] = None
 
 @router.post("/client/query")
 def client_query(request: NLQueryRequest):
@@ -47,7 +48,8 @@ def admin_query(request: NLQueryRequest):
             question=request.question,
             max_retries=request.max_retries,
             confidence_threshold=request.confidence_threshold,
-            mode="admin"
+            mode="admin",
+            store_id=request.store_id
         )
         return result
     except Exception as e:

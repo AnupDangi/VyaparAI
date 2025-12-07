@@ -19,13 +19,15 @@ cloudinary.config(
 router = APIRouter()
 
 @router.get("/")
-def get_products():
+def get_products(store_id: Optional[int] = None):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM products ORDER BY id DESC")
+            if store_id:
+                cur.execute("SELECT * FROM products WHERE store_id = %s ORDER BY id DESC", (store_id,))
+            else:
+                cur.execute("SELECT * FROM products ORDER BY id DESC")
             rows = cur.fetchall()
-            # Convert to list of dicts (psycopg dict_row already gives dict-like objects)
             return rows
     finally:
         conn.close()
@@ -50,6 +52,7 @@ async def create_product(
     stock: int = Form(...),
     category: str = Form(...),
     description: str = Form(...),
+    store_id: int = Form(...),
     image: UploadFile = File(...)
 ):
     # Upload to Cloudinary
@@ -63,9 +66,9 @@ async def create_product(
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO products (title, price, stock, category, description, image_url)
-                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, title, image_url
-            """, (title, price, stock, category, description, image_url))
+                INSERT INTO products (title, price, stock, category, description, image_url, store_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, title, image_url
+            """, (title, price, stock, category, description, image_url, store_id))
             new_product = cur.fetchone()
             return {"success": True, "product": new_product}
     except Exception as e:
@@ -123,14 +126,33 @@ def delete_product(product_id: int):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            # 1. Check if product is in any orders (order_items)
+            cur.execute("SELECT COUNT(*) as count FROM order_items WHERE product_id = %s", (product_id,))
+            if cur.fetchone()['count'] > 0:
+                raise HTTPException(status_code=400, detail="Cannot delete product that has been ordered. Try archiving it instead.")
+            
+            # 2. Check bookings
+            cur.execute("SELECT COUNT(*) as count FROM bookings WHERE product_id = %s", (product_id,))
+            if cur.fetchone()['count'] > 0:
+                 raise HTTPException(status_code=400, detail="Cannot delete product with existing bookings.")
+
+            # 3. Clean up Cart Items (Safe to delete)
+            cur.execute("DELETE FROM cart_items WHERE product_id = %s", (product_id,))
+
+            # 4. Delete Product
             cur.execute("DELETE FROM products WHERE id=%s RETURNING id", (product_id,))
             deleted = cur.fetchone()
+            
             if not deleted:
                 raise HTTPException(status_code=404, detail="Product not found")
+            
+            conn.commit()
             return {"success": True, "message": "Product deleted"}
     except HTTPException as he:
+        conn.rollback()
         raise he
     except Exception as e:
+        conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
